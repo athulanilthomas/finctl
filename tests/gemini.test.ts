@@ -44,8 +44,10 @@ test('relays only names with a compact schema and validates Gemini responses', a
     assert.deepEqual(body.contents, [{ parts: [{ text: JSON.stringify(names) }] }])
     assert.equal(JSON.stringify(body).includes(key), false)
     assert.equal(body.generationConfig.thinkingConfig.thinkingLevel, 'MINIMAL')
-    assert.equal(body.generationConfig.maxOutputTokens, 38)
-    assert.equal(body.generationConfig.responseJsonSchema.type, 'array')
+    assert.equal(body.generationConfig.maxOutputTokens, 256)
+    assert.deepEqual(body.generationConfig.responseJsonSchema, {
+      type: 'array', items: { type: 'integer', minimum: 0, maximum: 11 }, minItems: 2, maxItems: 2,
+    })
     return Response.json({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '[1,3]' }] } }] })
   })
   const response = await POST(request(names))
@@ -55,6 +57,21 @@ test('relays only names with a compact schema and validates Gemini responses', a
   assert.equal(stub.mock.callCount(), 1)
   assert.equal(isGeminiResult([1, 99], 2), false)
   assert.equal(isGeminiResult([1], 2), false)
+})
+
+test('identifies truncated responses, blocks, invalid outputs, and upstream request failures', async (t) => {
+  const stub = t.mock.method(globalThis, 'fetch', async () => Response.json({ candidates: [{ finishReason: 'MAX_TOKENS' }] }))
+  assert.deepEqual(await (await POST(request(['AMAZON']))).json(), { error: 'incomplete' })
+  stub.mock.mockImplementation(async () => Response.json({ promptFeedback: { blockReason: 'SAFETY' } }))
+  assert.deepEqual(await (await POST(request(['AMAZON']))).json(), { error: 'blocked' })
+  stub.mock.mockImplementation(async () => Response.json({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '[]' }] } }] }))
+  assert.deepEqual(await (await POST(request(['AMAZON']))).json(), { error: 'invalid_output' })
+  stub.mock.mockImplementation(async () => Response.json({ error: { message: 'private details' } }, { status: 400 }))
+  assert.deepEqual(await (await POST(request(['AMAZON']))).json(), { error: 'request_rejected' })
+  stub.mock.mockImplementation(async () => Response.json({ error: { message: 'private details' } }, { status: 404 }))
+  assert.deepEqual(await (await POST(request(['AMAZON']))).json(), { error: 'model_unavailable' })
+  stub.mock.mockImplementation(async () => { throw new Error('private details') })
+  assert.deepEqual(await (await POST(request(['AMAZON']))).json(), { error: 'unavailable' })
 })
 
 test('rejects duplicate names, extra fields, or oversized requests before calling Gemini', async (t) => {
@@ -121,4 +138,8 @@ test('separates Vercel preview authentication from Google key and project errors
   await assert.rejects(classify, /Google could not authenticate this key/)
   stub.mock.mockImplementation(async () => Response.json({ error: 'project_access' }, { status: 403 }))
   await assert.rejects(classify, /Google denied this project access/)
+  stub.mock.mockImplementation(async () => new Response('FUNCTION_INVOCATION_FAILED', { status: 500 }))
+  await assert.rejects(classify, /Vercel could not run the Gemini endpoint \(HTTP 500\)/)
+  stub.mock.mockImplementation(async () => Response.json({ error: 'incomplete' }, { status: 502 }))
+  await assert.rejects(classify, /Gemini hit its token limit/)
 })

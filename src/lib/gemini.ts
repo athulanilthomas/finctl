@@ -11,6 +11,14 @@ const geminiErrors = {
   project_access: 'Google denied this project access to Gemini. Check the project status in Google AI Studio.',
   preview_origin: 'This preview did not accept the request origin. Open the Vercel preview directly and try again.',
   quota: 'Gemini reached the quota for this key. Try again later.',
+  invalid_batch: 'The finctl endpoint rejected this merchant batch.',
+  model_unavailable: 'The Gemini Flash-Lite model is unavailable to this Google project.',
+  request_rejected: 'Google rejected finctl’s categorization request.',
+  incomplete: 'Gemini hit its token limit before finishing this batch.',
+  blocked: 'Gemini blocked this batch under its content policies.',
+  invalid_output: 'Gemini returned a category list that did not match the merchant batch.',
+  unavailable: 'The finctl endpoint could not get a response from Gemini. You can retry the remaining merchants.',
+  timed_out: 'Gemini did not respond in time. You can retry the remaining merchants.',
 } as const
 
 export type GeminiErrorCode = keyof typeof geminiErrors
@@ -76,8 +84,11 @@ export async function classifyWithGemini(names: string[], key: string, signal: A
       throw new Error('Vercel blocked the request. Sign in again and reopen the preview.')
     }
   }
-  if (!response.ok || !isJson) {
-    throw new Error('Gemini couldn’t finish this batch. You can retry the remaining merchants.')
+  if (response.status === 404 || (response.ok && !isJson)) {
+    throw new Error('The Gemini endpoint is missing from this deployment. Open the current Vercel preview.')
+  }
+  if (!response.ok) {
+    throw new Error(`Vercel could not run the Gemini endpoint (HTTP ${response.status}).`)
   }
 
   const output: unknown = await response.json()
