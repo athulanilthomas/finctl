@@ -63,8 +63,35 @@ test('checks activity against printed statement totals when present', () => {
     '02/01/2026  PAYMENT THANKYOU  + C 90.00',
     '03/01/2026  FINANCE CHARGE  C 2.99',
   ]
-  assert.equal(parseStatement([lines]).totalsMismatch, false)
-  assert.equal(parseStatement([lines.slice(0, -1)]).totalsMismatch, true)
+  assert.deepEqual(parseStatement([lines]).totalDifferences, [])
+  assert.deepEqual(parseStatement([lines.slice(0, -1)]).totalDifferences, [
+    { kind: 'charges', read: 4200, printed: 4499 },
+  ])
+  assert.deepEqual(parseStatement([lines.filter((line) => !line.includes('PAYMENT THANKYOU'))]).totalDifferences, [
+    { kind: 'credits', read: 0, printed: 9000 },
+  ])
+})
+
+test('reconciles a sign after the currency and a wrapped credit marker', () => {
+  const statement = parseStatement([[
+    title,
+    'PREVIOUS STATEMENT DUES  PAYMENTS/CREDITS  PURCHASES/DEBIT  FINANCE CHARGES  TOTAL AMOUNT DUE',
+    'C100.00 - C95.00 + C42.00 + C0.00 = C47.00',
+    'Domestic Transactions',
+    columns,
+    '01/01/2026  STORE C42.00',
+    '02/01/2026  PAYMENT THANKYOU C+90.00',
+    '03/01/2026  STORE REFUND C5.00',
+    'CR',
+  ]])
+
+  assert.deepEqual(statement.transactions.map(({ description, kind, amount }) => [description, kind, amount]), [
+    ['STORE REFUND', 'credit', 500],
+    ['PAYMENT THANKYOU', 'payment', 9000],
+    ['STORE', 'purchase', 4200],
+  ])
+  assert.equal(statement.unreadRows, 0)
+  assert.deepEqual(statement.totalDifferences, [])
 })
 
 test('rejects a different statement type and rows without a settled amount', () => {

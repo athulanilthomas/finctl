@@ -3,7 +3,7 @@ import { CalendarDays, ChartPie, CircleAlert, CreditCard, LayoutDashboard, List 
 import { CategoryGrouping } from '@/components/category-grouping'
 import { ReportOverview } from '@/components/report-overview'
 import { Transactions } from '@/components/transactions'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -141,13 +141,26 @@ export default function Report({ statement, onClear }: { statement: Statement; o
         </div>
       </section>
 
-      {(statement.unreadRows > 0 || statement.totalsMismatch) && (
+      {(statement.unreadRows > 0 || statement.totalDifferences.length > 0) && (
         <Alert variant="destructive">
           <CircleAlert aria-hidden="true" />
-          <AlertDescription>
-            {statement.unreadRows > 0 && `${statement.unreadRows} transaction ${statement.unreadRows === 1 ? 'row could' : 'rows could'} not be read. `}
-            {statement.totalsMismatch && 'The parsed activity differs from the totals printed on the statement. '}
-            Check the PDF before relying on this report.
+          <AlertTitle>Check this statement</AlertTitle>
+          <AlertDescription className="col-start-2 grid min-w-0 gap-1.5">
+            {statement.unreadRows > 0 && (
+              <div className="text-muted-foreground">
+                {statement.unreadRows} transaction {statement.unreadRows === 1 ? 'row could' : 'rows could'} not be read.
+              </div>
+            )}
+            {statement.totalDifferences.length > 0 && (
+              <dl className="grid gap-x-6 gap-y-1.5 sm:flex sm:flex-wrap">
+                {statement.totalDifferences.map(({ kind, read, printed }) => (
+                  <div key={kind}>
+                    <dt className="font-medium text-foreground">{kind === 'charges' ? 'Charges' : 'Payments and credits'}</dt>
+                    <dd className="text-muted-foreground tabular-nums">{formatAmount(read)} read · {formatAmount(printed)} on the PDF</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
           </AlertDescription>
         </Alert>
       )}
