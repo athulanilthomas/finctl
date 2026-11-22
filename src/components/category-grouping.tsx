@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowRight, Cpu, LoaderCircle, Sparkles } from 'lucide-react'
+import geminiLogo from '@/assets/gemini.svg'
 import { GeminiCategories } from '@/components/gemini-categories'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card'
@@ -118,7 +119,9 @@ export function CategoryGrouping({ names, labels, uncategorized, browser, onBrow
         }}
       >
         <DialogHeader>
-          <span aria-hidden="true" className={`${aiIconClass} mb-1`}><Sparkles className="size-[18px]" /></span>
+          <span aria-hidden="true" className={`${aiIconClass} mb-1`}>
+            {gemini ? <img src={geminiLogo} alt="" width={18} height={18} /> : <Sparkles className="size-[18px]" />}
+          </span>
           <DialogTitle ref={title} tabIndex={-1} className="text-xl leading-tight font-semibold tracking-tight outline-none">
             {gemini ? (geminiHasMerchants ? 'Group with Gemini' : 'Manage Gemini key') : 'Group with AI'}
           </DialogTitle>
@@ -152,7 +155,7 @@ export function CategoryGrouping({ names, labels, uncategorized, browser, onBrow
               {browserReady && <ArrowRight aria-hidden="true" className={arrowClass} />}
             </Button>
             <Button variant="outline" className={providerClass} aria-labelledby="gemini-title" aria-describedby="gemini-details" disabled={!geminiReady} onClick={() => setGemini(true)}>
-              <span aria-hidden="true" className={aiIconClass}><Sparkles className="size-[18px]" /></span>
+              <span aria-hidden="true" className={aiIconClass}><img src={geminiLogo} alt="" width={18} height={18} /></span>
               <span className="min-w-0 space-y-0.5">
                 <span id="gemini-title" className="block font-semibold">Gemini</span>
                 <span id="gemini-details" className="block text-sm leading-snug font-normal text-muted-foreground">{geminiDetails}</span>
