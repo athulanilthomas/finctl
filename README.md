@@ -4,7 +4,7 @@ See your monthly spending from a text-based HDFC credit-card statement PDF. The 
 
 ## Run locally
 
-Requires Node.js 24 and pnpm 12.
+Requires Node.js 26 and pnpm 12.
 
 ```sh
 pnpm install --frozen-lockfile
