@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react'
 import { Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Empty, EmptyDescription, EmptyHeader } from '@/components/ui/empty'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -12,7 +13,7 @@ import { formatAmount, formatDate } from '@/lib/report'
 import { transactionLabels } from '@/lib/statement'
 import type { Transaction } from '@/lib/statement'
 
-const pageSize = 30
+const pageSize = 12
 const views = [
   { value: 'all', label: 'All' },
   { value: 'charges', label: 'Charges' },
@@ -51,9 +52,10 @@ export function Transactions({ transactions, category, onClear, onEdit }: {
   onEdit: (id: number, category: Category) => void
 }) {
   const [view, setView] = useState('all')
-  const [limit, setLimit] = useState(pageSize)
+  const [page, setPage] = useState(0)
   const [editing, setEditing] = useState<Purchase | null>(null)
   const editTrigger = useRef<HTMLButtonElement>(null)
+  const title = useRef<HTMLHeadingElement>(null)
 
   const rows = transactions.filter((transaction) => {
     if (category) return transaction.kind === 'purchase' && transaction.category === category
@@ -61,17 +63,27 @@ export function Transactions({ transactions, category, onClear, onEdit }: {
     if (view === 'credits') return isCredit(transaction.kind)
     return true
   })
+  const pageCount = Math.ceil(rows.length / pageSize)
+  const currentPage = Math.min(page, Math.max(0, pageCount - 1))
+  const start = currentPage * pageSize
+  const end = Math.min(start + pageSize, rows.length)
 
   function openEditor(transaction: Purchase, trigger: HTMLButtonElement) {
     editTrigger.current = trigger
     setEditing(transaction)
   }
 
+  function changePage(nextPage: number) {
+    setPage(nextPage)
+    title.current?.focus({ preventScroll: true })
+    title.current?.scrollIntoView({ block: 'start' })
+  }
+
   return (
-    <Card id="transactions" className="min-w-0 scroll-mt-5 [--card-spacing:--spacing(4)] sm:[--card-spacing:--spacing(6)]">
+    <Card className="min-w-0 [--card-spacing:--spacing(4)] sm:[--card-spacing:--spacing(6)]">
       <CardHeader className="gap-3 sm:flex sm:flex-wrap sm:items-center sm:justify-between">
         <div>
-          <CardTitle><h2>Transactions</h2></CardTitle>
+          <CardTitle><h2 ref={title} tabIndex={-1} className="scroll-mt-16 outline-none">Transactions</h2></CardTitle>
           <CardDescription className="mt-1">
             {rows.length} {rows.length === 1 ? 'transaction' : 'transactions'}{category && ` · ${categoryLabels[category]}`}
           </CardDescription>
@@ -89,7 +101,7 @@ export function Transactions({ transactions, category, onClear, onEdit }: {
             onValueChange={(value) => {
               if (!value) return
               setView(value)
-              setLimit(pageSize)
+              setPage(0)
             }}
           >
             {views.map(({ value, label }) => (
@@ -116,7 +128,7 @@ export function Transactions({ transactions, category, onClear, onEdit }: {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.slice(0, limit).map((transaction) => (
+              {rows.slice(start, end).map((transaction) => (
                 <TableRow key={transaction.id}>
                   <TableCell className="hidden pl-6 text-muted-foreground md:table-cell">
                     <time dateTime={transaction.date}>{formatDate(transaction.date)}</time>
@@ -142,19 +154,33 @@ export function Transactions({ transactions, category, onClear, onEdit }: {
               ))}
             </TableBody>
           </Table>
-        ) : <p className="border-t px-6 pt-5 text-sm text-muted-foreground">No transactions match this filter.</p>}
-        {limit < rows.length && (
-          <div className="flex justify-center pt-5">
-            <Button variant="outline" className="min-h-11" onClick={() => setLimit(limit + pageSize)}>Show more</Button>
-          </div>
+        ) : (
+          <Empty className="border-t px-4 py-6">
+            <EmptyHeader><EmptyDescription>No transactions match this filter.</EmptyDescription></EmptyHeader>
+          </Empty>
         )}
       </CardContent>
+      {pageCount > 1 && (
+        <CardFooter className="flex-wrap justify-between gap-3 border-t">
+          <p className="text-sm text-muted-foreground tabular-nums" role="status">
+            {start + 1}–{end} of {rows.length}
+          </p>
+          <div className="flex gap-2">
+            <Button variant="outline" className="min-h-11" disabled={currentPage === 0} onClick={() => changePage(currentPage - 1)}>
+              Previous
+            </Button>
+            <Button variant="outline" className="min-h-11" disabled={currentPage + 1 === pageCount} onClick={() => changePage(currentPage + 1)}>
+              Next
+            </Button>
+          </div>
+        </CardFooter>
+      )}
       <Dialog open={editing !== null} onOpenChange={(open) => { if (!open) setEditing(null) }}>
         {editing && (
           <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto p-4 sm:p-6 [&>[data-slot=dialog-close]]:size-11" onCloseAutoFocus={(event) => {
-            if (!editTrigger.current?.isConnected) return
             event.preventDefault()
-            editTrigger.current.focus()
+            const target = editTrigger.current?.isConnected ? editTrigger.current : title.current
+            target?.focus()
           }}>
             <DialogHeader className="pr-10">
               <DialogTitle>Change purchase category</DialogTitle>

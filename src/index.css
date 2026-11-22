@@ -95,7 +95,7 @@
 }
 
 @layer components {
-  .spending-preview-grid {
+  .spending-grid {
     background-image: linear-gradient(var(--border) 1px, transparent 1px),
       linear-gradient(90deg, var(--border) 1px, transparent 1px);
     background-size: 1.5rem 1.5rem;

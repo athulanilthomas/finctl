@@ -16,7 +16,7 @@ const total = purchases.reduce((sum, { amount }) => sum + amount, 0)
 export function SpendingPreview() {
   return (
     <aside aria-labelledby="spending-preview-title" className="relative isolate min-w-0 overflow-hidden rounded-2xl border bg-muted/25 p-3 sm:p-6 lg:p-7">
-      <div aria-hidden="true" className="spending-preview-grid pointer-events-none absolute inset-0 -z-10" />
+      <div aria-hidden="true" className="spending-grid pointer-events-none absolute inset-0 -z-10" />
       <Card className="mx-auto w-full max-w-md border shadow-lg ring-0 [--card-spacing:--spacing(4)] sm:[--card-spacing:--spacing(6)]">
         <CardHeader className="border-b">
           <CardTitle className="text-lg">
