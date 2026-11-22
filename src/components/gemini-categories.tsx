@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { ArrowLeft, ArrowRight, KeyRound } from 'lucide-react'
+import { GeminiModelPicker } from '@/components/gemini-model-picker'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -10,6 +11,8 @@ import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import type { Category } from '@/lib/categories'
 import { classifyWithGemini, geminiBatchSize } from '@/lib/gemini'
+import { defaultGeminiModel, geminiModels } from '@/lib/gemini-models'
+import type { GeminiModel } from '@/lib/gemini-models'
 
 export function GeminiCategories({ names, labels, savedKey, onSavedKeyChange, onBatch, onBack, onComplete }: {
   names: string[]
@@ -22,6 +25,7 @@ export function GeminiCategories({ names, labels, savedKey, onSavedKeyChange, on
 }) {
   const [working, setWorking] = useState(false)
   const [error, setError] = useState('')
+  const [model, setModel] = useState<GeminiModel>(defaultGeminiModel)
   const keyInput = useRef<HTMLInputElement>(null)
   const backButton = useRef<HTMLButtonElement>(null)
   const focusAfterForget = useRef(false)
@@ -49,9 +53,10 @@ export function GeminiCategories({ names, labels, savedKey, onSavedKeyChange, on
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const key = savedKey ?? keyInput.current?.value.trim()
+    const input = keyInput.current
+    const key = savedKey ?? input?.value.trim()
     if (!key || !remaining.length || run.current) return
-    event.currentTarget.reset()
+    if (input) input.value = ''
 
     const controller = new AbortController()
     run.current = controller
@@ -60,7 +65,7 @@ export function GeminiCategories({ names, labels, savedKey, onSavedKeyChange, on
     try {
       for (let i = 0; i < remaining.length; i += geminiBatchSize) {
         const names = remaining.slice(i, i + geminiBatchSize)
-        const categories = await classifyWithGemini(names, key, controller.signal)
+        const categories = await classifyWithGemini(names, key, controller.signal, model)
         if (controller.signal.aborted) return
         if (i === 0 && savedKey === null) onSavedKeyChange(key)
         onBatch(new Map(names.map((name, index) => [name, categories[index]])))
@@ -84,16 +89,20 @@ export function GeminiCategories({ names, labels, savedKey, onSavedKeyChange, on
         <div className="grid gap-2 rounded-lg border bg-muted/30 p-3" role="status">
           <p className="font-medium tabular-nums">{completed} of {names.length} merchants reviewed</p>
           <Progress value={100 * completed / names.length} aria-label="Merchants reviewed" />
+          <p className="text-xs text-muted-foreground">Using Gemini {geminiModels[model].name}</p>
         </div>
       ) : (
         <>
           {remaining.length > 0 && (
-            <div className="min-w-0 overflow-hidden rounded-lg border bg-muted/20">
-              <p id="gemini-names" className="border-b bg-muted/40 px-3 py-2 font-medium">Merchant names to send ({remaining.length})</p>
-              <ul tabIndex={0} aria-labelledby="gemini-names" className="max-h-32 divide-y overflow-auto px-3 text-muted-foreground">
-                {remaining.map((name) => <li key={name} className="py-1.5 wrap-anywhere">{name}</li>)}
-              </ul>
-            </div>
+            <>
+              <GeminiModelPicker model={model} onChange={setModel} />
+              <div className="min-w-0 overflow-hidden rounded-lg border bg-muted/20">
+                <p id="gemini-names" className="border-b bg-muted/40 px-3 py-2 font-medium">Merchant names to send ({remaining.length})</p>
+                <ul tabIndex={0} aria-labelledby="gemini-names" className="max-h-24 divide-y overflow-auto px-3 text-muted-foreground sm:max-h-32">
+                  {remaining.map((name) => <li key={name} className="py-1.5 wrap-anywhere">{name}</li>)}
+                </ul>
+              </div>
+            </>
           )}
           <div className="grid min-w-0 gap-2">
             {savedKey ? (

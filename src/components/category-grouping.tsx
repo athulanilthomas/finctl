@@ -118,16 +118,16 @@ export function CategoryGrouping({ names, labels, uncategorized, browser, onBrow
           title.current?.focus()
         }}
       >
-        <DialogHeader>
-          <span aria-hidden="true" className={`${aiIconClass} mb-1`}>
+        <DialogHeader className="max-sm:grid max-sm:grid-cols-[auto_minmax(0,1fr)] max-sm:items-center max-sm:gap-x-3">
+          <span aria-hidden="true" className={`${aiIconClass} sm:mb-1`}>
             {gemini ? <img src={geminiLogo} alt="" width={18} height={18} /> : <Sparkles className="size-[18px]" />}
           </span>
-          <DialogTitle ref={title} tabIndex={-1} className="text-xl leading-tight font-semibold tracking-tight outline-none">
+          <DialogTitle ref={title} tabIndex={-1} className="text-xl leading-tight font-semibold tracking-tight outline-none max-sm:pr-6">
             {gemini ? (geminiHasMerchants ? 'Group with Gemini' : 'Manage Gemini key') : 'Group with AI'}
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="max-sm:col-span-2">
             {!gemini ? 'Choose how to group your purchases.'
-              : geminiHasMerchants ? 'The merchant names shown here go through finctl’s Vercel endpoint to Google. The PDF and transaction details stay in your browser.'
+              : geminiHasMerchants ? 'The merchant names below go to Google through finctl. Your PDF and transaction details stay in your browser.'
                 : 'The key stays available after refreshing this tab, until you forget it or the session ends.'}
           </DialogDescription>
         </DialogHeader>
