@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { CalendarDays, ChartPie, CircleAlert, CreditCard, LayoutDashboard, List, Sparkles } from 'lucide-react'
-import { GeminiCategories } from '@/components/gemini-categories'
+import { CalendarDays, ChartPie, CircleAlert, CreditCard, LayoutDashboard, List } from 'lucide-react'
+import { CategoryGrouping } from '@/components/category-grouping'
 import { ReportOverview } from '@/components/report-overview'
 import { Transactions } from '@/components/transactions'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -8,7 +8,6 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
-import { Progress } from '@/components/ui/progress'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -77,8 +76,6 @@ export default function Report({ statement, onClear }: { statement: Statement; o
     if (name && geminiLabels.has(name)) continue
     if (merchant.length >= 3 && !edits.has(id) && !modelLabels.has(merchant)) merchants.add(merchant)
   }
-  const aiSupported = availability !== null && availability !== 'unavailable'
-
   function changeTab(value: string) {
     setTab(value)
     const navigation = tabs.current
@@ -176,33 +173,14 @@ export default function Report({ statement, onClear }: { statement: Statement; o
         </TabsContent>
 
         <TabsContent value="categories" className={`${panelClass} space-y-4`}>
-          <GeminiCategories
+          <CategoryGrouping
             names={cloudNames}
             labels={geminiLabels}
-            disabled={running}
-            onBatch={(batch) => setGeminiLabels((previous) => new Map([...previous, ...batch]))}
+            uncategorized={uncategorized?.count ?? 0}
+            browser={{ availability, hasMerchants: merchants.size > 0, running, download, failed: aiError }}
+            onBrowser={() => { void improveCategories() }}
+            onGeminiBatch={(batch) => setGeminiLabels((previous) => new Map([...previous, ...batch]))}
           />
-          {(uncategorized || running || aiError) && (
-            <Alert role="status" className="flex flex-col gap-3 bg-muted/30 sm:flex-row sm:items-center sm:justify-between">
-              <AlertDescription className="min-w-0 flex-1">
-                {running ? (
-                  download !== null ? (
-                    <>
-                      <span>Downloading Chrome’s on-device model</span>
-                      <Progress value={download * 100} aria-label="Model download" className="mt-2 max-w-sm" />
-                    </>
-                  ) : 'Grouping purchases on this device…'
-                ) : aiError ? 'Local AI couldn’t finish. Retry or edit categories in Transactions.'
-                  : availability === 'unavailable' ? 'Local AI is unavailable on this device. You can edit categories in Transactions.'
-                  : `${uncategorized?.count} ${uncategorized?.count === 1 ? 'purchase needs' : 'purchases need'} a category.`}
-              </AlertDescription>
-              {aiSupported && (merchants.size > 0 || running) && (
-                <Button variant="outline" className="min-h-11" onClick={() => { void improveCategories() }} disabled={running}>
-                  <Sparkles aria-hidden="true" /> Improve categories
-                </Button>
-              )}
-            </Alert>
-          )}
           {ranked.length > 0 ? (
             <Card className="min-w-0 [--card-spacing:--spacing(4)] sm:[--card-spacing:--spacing(6)]">
               <CardHeader>
