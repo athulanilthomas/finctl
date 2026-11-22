@@ -4,13 +4,13 @@ import { ChartNoAxesColumnIncreasing, FileText, LoaderCircle, LockKeyhole, Uploa
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { SpendingPreview } from '@/components/spending-preview'
 import { ThemeToggle } from '@/components/theme-toggle'
 import type { Statement } from '@/lib/statement'
 
@@ -100,24 +100,23 @@ export default function App() {
             <Report statement={statement} onClear={() => setStatement(null)} />
           </Suspense>
         ) : (
-          <section className="mx-auto grid max-w-2xl gap-5 sm:gap-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1 motion-safe:duration-200" aria-labelledby="upload-title">
-            <div className="space-y-2">
-              <h1 id="upload-title" className="text-2xl font-semibold tracking-tight sm:text-3xl">
-                Statement analysis
-              </h1>
-              <p className="text-base text-muted-foreground">
-                See your biggest spending category and the purchases behind it.
-              </p>
-            </div>
+          <section
+            className="mx-auto grid max-w-2xl items-center gap-8 py-3 sm:gap-10 sm:py-8 lg:max-w-none lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)] lg:gap-12 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1 motion-safe:duration-200"
+            aria-labelledby="upload-title"
+          >
+            <div className="grid min-w-0 gap-6 sm:gap-8">
+              <div className="space-y-4">
+                <h1 id="upload-title" className="text-[clamp(2.625rem,6.6vw,5.25rem)] leading-[1.02] font-semibold tracking-[-0.065em] text-balance">
+                  See where your money went.
+                </h1>
+                <p className="max-w-md text-lg leading-relaxed text-pretty text-muted-foreground sm:text-xl">
+                  Open an HDFC credit-card statement to see your monthly totals, top categories, and the purchases behind them.
+                </p>
+              </div>
 
-            <Card className="[--card-spacing:--spacing(4)] sm:[--card-spacing:--spacing(6)]">
-              <CardHeader>
-                <CardTitle><h2>HDFC credit-card statement</h2></CardTitle>
-                <CardDescription>Password-protected PDFs are supported.</CardDescription>
-              </CardHeader>
-              <CardContent>
+              <div className="grid min-w-0 max-w-xl gap-3">
                 <Empty
-                  className="border border-input bg-muted/35 px-3 py-6 transition-colors data-[dragging=true]:border-primary data-[dragging=true]:bg-accent sm:px-6 sm:py-10"
+                  className="items-stretch justify-between gap-4 border border-input bg-card px-4 py-4 text-left text-wrap transition-colors data-[dragging=true]:border-primary data-[dragging=true]:bg-accent sm:flex-row sm:items-center"
                   data-dragging={dragging}
                   onDragOver={(event) => {
                     event.preventDefault()
@@ -131,12 +130,16 @@ export default function App() {
                     if (file) void openFile(file)
                   }}
                 >
-                  <EmptyHeader>
-                    <EmptyMedia variant="icon">
+                  <EmptyHeader className="min-w-0 flex-row items-start gap-3 sm:items-center">
+                    <EmptyMedia variant="icon" className="mb-0 size-11">
                       <FileText className="size-5" aria-hidden="true" />
                     </EmptyMedia>
-                    <EmptyTitle className="text-base">Open a PDF statement</EmptyTitle>
-                    <EmptyDescription className="hidden [@media(pointer:fine)]:block">Drop your file here or browse below.</EmptyDescription>
+                    <div className="min-w-0">
+                      <EmptyTitle className="text-base">
+                        <h2>Open a statement</h2>
+                      </EmptyTitle>
+                      <EmptyDescription>Password-protected PDFs supported.</EmptyDescription>
+                    </div>
                   </EmptyHeader>
                   <input
                     ref={filePicker}
@@ -150,9 +153,9 @@ export default function App() {
                       if (file) void openFile(file)
                     }}
                   />
-                  <EmptyContent>
+                  <EmptyContent className="max-w-none sm:w-auto sm:max-w-52">
                     {filename ? (
-                      <div className="flex w-full min-w-0 flex-wrap items-center justify-center gap-2">
+                      <div className="flex w-full min-w-0 flex-wrap items-center justify-center gap-1.5 sm:justify-end">
                         <div className="flex min-w-0 items-center gap-2" role="status">
                           <LoaderCircle className="size-4 shrink-0 motion-safe:animate-spin text-primary" aria-hidden="true" />
                           <span className="truncate" title={filename}>Reading {filename}</span>
@@ -166,13 +169,16 @@ export default function App() {
                     )}
                   </EmptyContent>
                 </Empty>
+                <p className="hidden text-sm text-muted-foreground [@media(pointer:fine)]:block">You can also drop a PDF into the box.</p>
                 {error && (
                   <Alert variant="destructive">
                     <AlertDescription className="wrap-anywhere">{error}</AlertDescription>
                   </Alert>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
+
+            <SpendingPreview />
           </section>
         )}
       </main>

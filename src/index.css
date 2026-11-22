@@ -94,6 +94,15 @@
   }
 }
 
+@layer components {
+  .spending-preview-grid {
+    background-image: linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 1.5rem 1.5rem;
+    mask-image: linear-gradient(135deg, black, transparent 85%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   [data-slot="dialog-overlay"],
   [data-slot="dialog-content"],
