@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { POST } from '../api/gemini.ts'
-import { geminiBatchSize, geminiMerchantName, geminiMerchantNames, isGeminiResult } from '../src/lib/gemini.ts'
+import { classifyWithGemini, geminiBatchSize, geminiMerchantName, geminiMerchantNames, isGeminiResult } from '../src/lib/gemini.ts'
 import { parseStatement } from '../src/lib/statement.ts'
 
 const key = 'synthetic-api-key-for-tests'
@@ -68,11 +68,57 @@ test('rejects duplicate names, extra fields, or oversized requests before callin
 
 test('returns sanitized errors for bad keys, quota limits, and invalid model labels', async (t) => {
   const stub = t.mock.method(globalThis, 'fetch', async () => Response.json({ error: { details: [{ reason: 'API_KEY_INVALID' }] } }, { status: 400 }))
-  assert.equal((await POST(request(['AMAZON']))).status, 401)
+  const invalid = await POST(request(['AMAZON']))
+  assert.equal(invalid.status, 401)
+  assert.deepEqual(await invalid.json(), { error: 'invalid_key' })
   stub.mock.mockImplementation(async () => new Response('private upstream details', { status: 429 }))
   const limited = await POST(request(['AMAZON']))
   assert.equal(limited.status, 429)
-  assert.equal(await limited.text(), '')
+  assert.deepEqual(await limited.json(), { error: 'quota' })
+  stub.mock.mockImplementation(async () => Response.json({ error: { details: [{ reason: 'API_KEY_HTTP_REFERRER_BLOCKED' }] } }, { status: 403 }))
+  const restricted = await POST(request(['AMAZON']))
+  assert.equal(restricted.status, 403)
+  assert.deepEqual(await restricted.json(), { error: 'restricted_key' })
+  stub.mock.mockImplementation(async () => Response.json({ error: { status: 'PERMISSION_DENIED', message: 'private project details' } }, { status: 403 }))
+  assert.deepEqual(await (await POST(request(['AMAZON']))).json(), { error: 'project_access' })
   stub.mock.mockImplementation(async () => Response.json({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '[999]' }] } }] }))
   assert.equal((await POST(request(['AMAZON']))).status, 502)
+})
+
+test('uses the public preview origin and forwards credentials without assuming a key format', async (t) => {
+  const auth = 'synthetic.key-with+punctuation'
+  const stub = t.mock.method(globalThis, 'fetch', async (_url: string, options: RequestInit) => {
+    assert.equal(new Headers(options.headers).get('x-goog-api-key'), auth)
+    return Response.json({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '[3]' }] } }] })
+  })
+  const previewRequest = new Request('http://localhost:3000/api/gemini', {
+    method: 'POST',
+    headers: {
+      origin: 'https://preview.finctl.test',
+      'x-forwarded-host': 'preview.finctl.test',
+      'x-forwarded-proto': 'https',
+      'Content-Type': 'application/json',
+      'x-goog-api-key': auth,
+    },
+    body: JSON.stringify(['AMAZON']),
+  })
+  const response = await POST(previewRequest)
+  assert.equal(response.status, 200)
+  assert.equal(stub.mock.callCount(), 1)
+  assert.deepEqual(await (await POST(request(['AMAZON'], 'https://different.test'))).json(), { error: 'preview_origin' })
+})
+
+test('separates Vercel preview authentication from Google key and project errors', async (t) => {
+  const stub = t.mock.method(globalThis, 'fetch', async () => Response.json({
+    error: { message: 'Protected deployment', code: '401' },
+    message: 'Protected by Vercel Authentication',
+  }, { status: 401 }))
+  const classify = () => classifyWithGemini(['AMAZON'], key, new AbortController().signal)
+  await assert.rejects(classify, /Vercel blocked the request/)
+  stub.mock.mockImplementation(async () => Response.json({ error: 'preview_origin' }, { status: 403 }))
+  await assert.rejects(classify, /preview did not accept the request origin/)
+  stub.mock.mockImplementation(async () => Response.json({ error: 'invalid_key' }, { status: 401 }))
+  await assert.rejects(classify, /Google could not authenticate this key/)
+  stub.mock.mockImplementation(async () => Response.json({ error: 'project_access' }, { status: 403 }))
+  await assert.rejects(classify, /Google denied this project access/)
 })
