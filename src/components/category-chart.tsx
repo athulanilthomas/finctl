@@ -19,8 +19,8 @@ export default function CategoryChart({ groups, colors, total }: {
   }))
 
   return (
-    <div className="relative mx-auto size-57 max-w-full" aria-hidden="true">
-      <ChartContainer config={config} className="size-full" initialDimension={{ width: 228, height: 228 }}>
+    <div className="relative mx-auto aspect-square w-full max-w-56" aria-hidden="true">
+      <ChartContainer config={config} className="absolute inset-0 size-full" initialDimension={{ width: 224, height: 224 }}>
         <PieChart accessibilityLayer={false}>
           <ChartTooltip
             cursor={false}
@@ -40,9 +40,9 @@ export default function CategoryChart({ groups, colors, total }: {
           />
         </PieChart>
       </ChartContainer>
-      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
         <span className="text-sm text-muted-foreground">Purchases</span>
-        <span className="mt-1 text-lg font-semibold tracking-tight tabular-nums">{formatAmount(total)}</span>
+        <span className="mt-1 max-w-[68%] text-lg font-semibold wrap-anywhere tracking-tight tabular-nums">{formatAmount(total)}</span>
       </div>
     </div>
   )
