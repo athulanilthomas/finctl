@@ -4,11 +4,13 @@ See your monthly spending from a text-based HDFC credit-card statement PDF. The 
 
 ## Run locally
 
-Requires Node.js 24.
+Requires Node.js 24 and pnpm 12.
 
 ```sh
-npm ci
-npm run dev
+pnpm install --frozen-lockfile
+pnpm dev
 ```
 
-Run `npm test` for the statement parser tests. Run `npm run build` to generate `dist/`. On Vercel, use the Vite preset.
+Run `pnpm test` for the statement parser tests. Run `pnpm build` to generate `dist/`.
+
+On Vercel, use the Vite preset and set `ENABLE_EXPERIMENTAL_COREPACK=1` to use the pinned pnpm version.
