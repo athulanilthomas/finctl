@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { CalendarDays, ChartPie, CircleAlert, CreditCard, LayoutDashboard, List, Sparkles } from 'lucide-react'
+import { GeminiCategories } from '@/components/gemini-categories'
 import { ReportOverview } from '@/components/report-overview'
 import { Transactions } from '@/components/transactions'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -13,6 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { categoryLabels } from '@/lib/categories'
 import type { Category } from '@/lib/categories'
+import { geminiMerchantNames } from '@/lib/gemini'
 import { groupMerchants, localAiAvailability } from '@/lib/local-ai'
 import { formatAmount, formatMonth, formatRange, monthsIn, summarize } from '@/lib/report'
 import type { Statement } from '@/lib/statement'
@@ -33,12 +35,15 @@ export default function Report({ statement, onClear }: { statement: Statement; o
   const [filter, setFilter] = useState<Category | null>(null)
   const [edits, setEdits] = useState(() => new Map<number, Category>())
   const [modelLabels, setModelLabels] = useState(() => new Map<string, Category>())
+  const [geminiLabels, setGeminiLabels] = useState(() => new Map<string, Category>())
   const [availability, setAvailability] = useState<Availability | null>(null)
   const [running, setRunning] = useState(false)
   const [download, setDownload] = useState<number | null>(null)
   const [aiError, setAiError] = useState(false)
   const aiRun = useRef<AbortController | null>(null)
   const tabs = useRef<HTMLDivElement>(null)
+  const merchantNames = useMemo(() => geminiMerchantNames(statement.transactions), [statement])
+  const cloudNames = useMemo(() => [...new Set(merchantNames.values())], [merchantNames])
 
   useEffect(() => {
     let cancelled = false
@@ -53,11 +58,13 @@ export default function Report({ statement, onClear }: { statement: Statement; o
     .filter(({ date }) => date.startsWith(month))
     .map((transaction) => {
       if (transaction.kind !== 'purchase') return transaction
+      const name = merchantNames.get(transaction.id)
       return {
         ...transaction,
-        category: edits.get(transaction.id) ?? modelLabels.get(transaction.merchant) ?? transaction.category,
+        category: edits.get(transaction.id) ?? (name ? geminiLabels.get(name) : undefined) ??
+          modelLabels.get(transaction.merchant) ?? transaction.category,
       }
-    }), [statement, month, edits, modelLabels])
+    }), [statement, month, edits, modelLabels, geminiLabels, merchantNames])
 
   const summary = useMemo(() => summarize(transactions), [transactions])
   const { totals, ranked, uncategorized } = summary
@@ -66,6 +73,8 @@ export default function Report({ statement, onClear }: { statement: Statement; o
   for (const transaction of transactions) {
     if (transaction.kind !== 'purchase' || transaction.category !== 'uncategorized') continue
     const { id, merchant } = transaction
+    const name = merchantNames.get(id)
+    if (name && geminiLabels.has(name)) continue
     if (merchant.length >= 3 && !edits.has(id) && !modelLabels.has(merchant)) merchants.add(merchant)
   }
   const aiSupported = availability !== null && availability !== 'unavailable'
@@ -167,6 +176,12 @@ export default function Report({ statement, onClear }: { statement: Statement; o
         </TabsContent>
 
         <TabsContent value="categories" className={`${panelClass} space-y-4`}>
+          <GeminiCategories
+            names={cloudNames}
+            labels={geminiLabels}
+            disabled={running}
+            onBatch={(batch) => setGeminiLabels((previous) => new Map([...previous, ...batch]))}
+          />
           {(uncategorized || running || aiError) && (
             <Alert role="status" className="flex flex-col gap-3 bg-muted/30 sm:flex-row sm:items-center sm:justify-between">
               <AlertDescription className="min-w-0 flex-1">
