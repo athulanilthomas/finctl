@@ -131,7 +131,9 @@ export function Transactions({ transactions, category, onClear, onEdit }: {
                     <TransactionCategory transaction={transaction} onEdit={openEditor} />
                   </TableCell>
                   <TableCell className="py-3 pr-4 text-right align-top font-medium whitespace-normal wrap-anywhere tabular-nums sm:pr-6 md:align-middle">
-                    {isCredit(transaction.kind) ? <span className="text-primary">+{formatAmount(transaction.amount)}</span> : formatAmount(transaction.amount)}
+                    <span className="font-mono">
+                      {isCredit(transaction.kind) ? <span className="text-primary">+{formatAmount(transaction.amount)}</span> : formatAmount(transaction.amount)}
+                    </span>
                     <time dateTime={transaction.date} className="mt-1 block text-sm font-normal text-muted-foreground md:hidden">
                       {formatDate(transaction.date)}
                     </time>

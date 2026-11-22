@@ -47,7 +47,7 @@ export default function Report({ statement, onClear }: { statement: Statement; o
     }), [statement, month, edits, modelLabels])
 
   const { totals, totalCharges, ranked, largest, uncategorized } = useMemo(() => summarize(transactions), [transactions])
-  const colors = ranked.map(({ category }, index) => category === 'uncategorized' ? 'var(--input)' : chartColors[index % chartColors.length])
+  const colors = ranked.map(({ category }, index) => category === 'uncategorized' ? 'var(--muted-foreground)' : chartColors[index % chartColors.length])
   const largestShare = largest ? Math.round(100 * largest.amount / totals.purchase) : 0
   const merchants = new Set<string>()
   for (const transaction of transactions) {
@@ -88,7 +88,7 @@ export default function Report({ statement, onClear }: { statement: Statement; o
   ]
 
   return (
-    <div className="grid min-w-0 gap-4 sm:gap-6">
+    <div className="grid min-w-0 gap-4 sm:gap-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1 motion-safe:duration-200">
       <section className="grid gap-4 sm:flex sm:flex-wrap sm:items-end sm:justify-between" aria-labelledby="report-title">
         <div>
           <p className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
@@ -214,7 +214,7 @@ export default function Report({ statement, onClear }: { statement: Statement; o
                       {categoryLabels[category]}
                       <span className="block text-xs font-normal text-muted-foreground sm:text-sm">{count} {count === 1 ? 'purchase' : 'purchases'}</span>
                     </span>
-                    <span className="max-w-[46%] text-right wrap-anywhere tabular-nums">{formatAmount(amount)}</span>
+                    <span className="max-w-[46%] text-right font-mono wrap-anywhere tabular-nums">{formatAmount(amount)}</span>
                   </Button>
                 </li>
               ))}

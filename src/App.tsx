@@ -11,6 +11,7 @@ import {
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { ThemeToggle } from '@/components/theme-toggle'
 import type { Statement } from '@/lib/statement'
 
 const loadReport = () => import('@/components/report')
@@ -75,7 +76,7 @@ export default function App() {
 
   return (
     <div className="min-h-dvh">
-      <header className="border-b bg-card">
+      <header className="border-b">
         <div className="mx-auto flex min-h-16 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-2.5 text-lg font-semibold tracking-tight">
             <span className="grid size-8 place-items-center rounded-md bg-primary text-primary-foreground">
@@ -83,9 +84,13 @@ export default function App() {
             </span>
             finctl<span className="sr-only"> credit-card spending</span>
           </div>
-          <Badge variant="outline" className="h-7 gap-1.5 px-2.5 text-sm text-muted-foreground">
-            <LockKeyhole aria-hidden="true" /> On-device analysis
-          </Badge>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Badge variant="outline" className="h-7 gap-1.5 px-2.5 text-sm text-muted-foreground">
+              <LockKeyhole aria-hidden="true" />
+              <span>On-device<span className="hidden sm:inline"> analysis</span></span>
+            </Badge>
+            <ThemeToggle />
+          </div>
         </div>
       </header>
 
@@ -95,7 +100,7 @@ export default function App() {
             <Report statement={statement} onClear={() => setStatement(null)} />
           </Suspense>
         ) : (
-          <section className="mx-auto grid max-w-2xl gap-5 sm:gap-6" aria-labelledby="upload-title">
+          <section className="mx-auto grid max-w-2xl gap-5 sm:gap-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1 motion-safe:duration-200" aria-labelledby="upload-title">
             <div className="space-y-2">
               <h1 id="upload-title" className="text-2xl font-semibold tracking-tight sm:text-3xl">
                 Statement analysis
@@ -127,7 +132,7 @@ export default function App() {
                   }}
                 >
                   <EmptyHeader>
-                    <EmptyMedia variant="icon" className="bg-accent text-primary">
+                    <EmptyMedia variant="icon">
                       <FileText className="size-5" aria-hidden="true" />
                     </EmptyMedia>
                     <EmptyTitle className="text-base">Open a PDF statement</EmptyTitle>
