@@ -1,11 +1,16 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { CalendarDays, CircleAlert, CreditCard, Receipt, Sparkles } from 'lucide-react'
+import { CalendarDays, ChartPie, CircleAlert, CreditCard, LayoutDashboard, List, Sparkles } from 'lucide-react'
+import { ReportOverview } from '@/components/report-overview'
+import { Transactions } from '@/components/transactions'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Progress } from '@/components/ui/progress'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Transactions } from '@/components/transactions'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { categoryLabels } from '@/lib/categories'
 import type { Category } from '@/lib/categories'
 import { groupMerchants, localAiAvailability } from '@/lib/local-ai'
@@ -13,11 +18,18 @@ import { formatAmount, formatMonth, formatRange, monthsIn, summarize } from '@/l
 import type { Statement } from '@/lib/statement'
 
 const CategoryChart = lazy(() => import('@/components/category-chart'))
-const chartColors = ['#206149', '#74a87d', '#c4a158', '#6c90ab', '#9b87aa', '#799389']
+const chartColors = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)']
+const reportTabs = [
+  { value: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { value: 'categories', label: 'Categories', icon: ChartPie },
+  { value: 'transactions', label: 'Transactions', icon: List },
+] as const
+const panelClass = 'min-w-0 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1 motion-safe:duration-200'
 
 export default function Report({ statement, onClear }: { statement: Statement; onClear: () => void }) {
   const months = useMemo(() => monthsIn(statement.transactions), [statement])
   const [month, setMonth] = useState(months[0])
+  const [tab, setTab] = useState('overview')
   const [filter, setFilter] = useState<Category | null>(null)
   const [edits, setEdits] = useState(() => new Map<number, Category>())
   const [modelLabels, setModelLabels] = useState(() => new Map<string, Category>())
@@ -26,6 +38,7 @@ export default function Report({ statement, onClear }: { statement: Statement; o
   const [download, setDownload] = useState<number | null>(null)
   const [aiError, setAiError] = useState(false)
   const aiRun = useRef<AbortController | null>(null)
+  const tabs = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -46,8 +59,9 @@ export default function Report({ statement, onClear }: { statement: Statement; o
       }
     }), [statement, month, edits, modelLabels])
 
-  const { totals, totalCharges, ranked, largest, uncategorized } = useMemo(() => summarize(transactions), [transactions])
-  const colors = ranked.map(({ category }, index) => category === 'uncategorized' ? '#c5cdc7' : chartColors[index % chartColors.length])
+  const summary = useMemo(() => summarize(transactions), [transactions])
+  const { totals, ranked, uncategorized } = summary
+  const colors = ranked.map(({ category }, index) => category === 'uncategorized' ? 'var(--muted-foreground)' : chartColors[index % chartColors.length])
   const merchants = new Set<string>()
   for (const transaction of transactions) {
     if (transaction.kind !== 'purchase' || transaction.category !== 'uncategorized') continue
@@ -55,6 +69,15 @@ export default function Report({ statement, onClear }: { statement: Statement; o
     if (merchant.length >= 3 && !edits.has(id) && !modelLabels.has(merchant)) merchants.add(merchant)
   }
   const aiSupported = availability !== null && availability !== 'unavailable'
+
+  function changeTab(value: string) {
+    setTab(value)
+    const navigation = tabs.current
+    if (!navigation) return
+
+    if (navigation.getBoundingClientRect().top < 0) navigation.scrollIntoView({ block: 'start' })
+    navigation.querySelector<HTMLButtonElement>(`[data-report-tab="${value}"]`)?.focus({ preventScroll: true })
+  }
 
   async function improveCategories() {
     if (aiRun.current || !merchants.size) return
@@ -79,40 +102,36 @@ export default function Report({ statement, onClear }: { statement: Statement; o
     }
   }
 
-  const activity = [
-    { label: 'Total charges', amount: totalCharges, note: 'Purchases, fees and cash advances' },
-    { label: 'Purchases', amount: totals.purchase, note: 'Before refunds and credits' },
-    { label: 'Card payments', amount: totals.payment, note: 'Repayments to your card' },
-    { label: 'Refunds & other credits', amount: totals.credit, note: 'Credits applied to your card' },
-  ]
-
   return (
-    <div className="grid gap-6">
-      <section className="flex flex-wrap items-end justify-between gap-4" aria-labelledby="report-title">
-        <div>
-          <p className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-            <CreditCard className="size-4 text-primary" aria-hidden="true" /> HDFC credit card
-          </p>
-          <h1 id="report-title" className="mt-2 text-3xl font-semibold tracking-[-0.055em] sm:text-[2.85rem] sm:leading-tight">
+    <div className="grid min-w-0 gap-5 sm:gap-7 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1 motion-safe:duration-200">
+      <section className="grid gap-4 sm:flex sm:flex-wrap sm:items-end sm:justify-between sm:gap-5" aria-labelledby="report-title">
+        <div className="min-w-0 space-y-2.5">
+          <Badge variant="outline" className="h-7 gap-1.5 px-2.5 text-sm text-muted-foreground">
+            <CreditCard aria-hidden="true" /> HDFC credit card
+          </Badge>
+          <h1 id="report-title" className="text-[clamp(2rem,5.5vw,3.75rem)] leading-[1.04] font-semibold tracking-[-0.06em]">
             Monthly spending
           </h1>
-          <p className="mt-1.5 text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground sm:text-base">
             Transactions from {formatRange(transactions[transactions.length - 1].date, transactions[0].date)}, {month.slice(0, 4)}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex">
           <Select value={month} onValueChange={(value) => {
             setMonth(value)
             setFilter(null)
           }}>
-            <SelectTrigger aria-label="Report month" className="bg-card">
-              <CalendarDays aria-hidden="true" /><SelectValue />
+            <SelectTrigger aria-label="Report month" className="min-h-11 w-full min-w-0 bg-card sm:w-auto">
+              <CalendarDays aria-hidden="true" />
+              <SelectValue>{formatMonth(month)}</SelectValue>
             </SelectTrigger>
             <SelectContent position="popper">
-              {months.map((month) => <SelectItem key={month} value={month}>{formatMonth(month)}</SelectItem>)}
+              {months.map((value) => (
+                <SelectItem key={value} value={value} className="min-h-11 md:min-h-0">{formatMonth(value)}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" onClick={onClear}>Clear report</Button>
+          <Button variant="outline" className="min-h-11" onClick={onClear}>Clear report</Button>
         </div>
       </section>
 
@@ -127,122 +146,105 @@ export default function Report({ statement, onClear }: { statement: Statement; o
         </Alert>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_1.32fr]">
-        <Card className="upload-shell justify-between border-0 py-5 text-white ring-0">
-          <CardHeader className="flex items-center justify-between">
-            <CardTitle className="font-medium text-[#d5e7dc]">
-              {largest && uncategorized && uncategorized.amount >= largest.amount ? 'Largest identified category' : 'Largest spending category'}
-            </CardTitle>
-            <Receipt className="size-5 text-[#c6e897]" aria-hidden="true" />
-          </CardHeader>
-          <CardContent className="pt-3">
-            {largest ? (
-              <>
-                <p className="text-xl font-medium tracking-tight">{categoryLabels[largest.category]}</p>
-                <p className="mt-1 text-[clamp(2rem,5vw,3.35rem)] leading-none font-semibold tracking-[-0.06em] text-[#d9f1aa] tabular-nums">
-                  {formatAmount(largest.amount)}
-                </p>
-                <p className="mt-4 text-sm text-[#d5e7dc]">
-                  {Math.round(100 * largest.amount / totals.purchase)}% of purchases · {largest.count} {largest.count === 1 ? 'purchase' : 'purchases'}
-                  {uncategorized && ` · ${formatAmount(uncategorized.amount)} uncategorized`}
-                </p>
-              </>
-            ) : (
-              <p className="text-lg text-[#d5e7dc]">
-                {uncategorized ? 'Categorize a purchase to see your largest category.' : 'No purchases this month.'}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Card activity</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <dl className="grid grid-cols-2 gap-x-5 gap-y-4">
-              {activity.map(({ label, amount, note }) => (
-                <div key={label} className="min-w-0 border-t pt-3">
-                  <dt className="text-sm font-medium text-muted-foreground">{label}</dt>
-                  <dd className="mt-0.5 text-[clamp(1.05rem,2vw,1.45rem)] font-semibold tracking-tight tabular-nums">{formatAmount(amount)}</dd>
-                  <dd className="mt-1 hidden text-sm text-muted-foreground sm:block">{note}</dd>
-                </div>
-              ))}
-            </dl>
-            {(totals.fee > 0 || totals.cash > 0) && (
-              <p className="mt-4 border-t pt-3 text-sm text-muted-foreground">
-                {totals.fee > 0 && `Fees & interest ${formatAmount(totals.fee)}`}
-                {totals.fee > 0 && totals.cash > 0 && ' · '}
-                {totals.cash > 0 && `Cash advances ${formatAmount(totals.cash)}`}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      <Tabs ref={tabs} value={tab} onValueChange={changeTab} activationMode="manual" className="min-w-0 gap-4 sm:gap-6">
+        <div className="sticky top-0 z-10 border-b bg-background">
+          <TabsList variant="line" className="w-full justify-start gap-0 p-0 group-data-horizontal/tabs:h-12 sm:w-auto sm:gap-1" aria-label="Spending report sections">
+            {reportTabs.map(({ value, label, icon: Icon }) => (
+              <TabsTrigger
+                key={value}
+                value={value}
+                data-report-tab={value}
+                className="min-h-11 px-1 group-data-horizontal/tabs:after:-bottom-px motion-reduce:transition-none motion-reduce:after:transition-none sm:px-4"
+              >
+                <Icon className="hidden sm:inline-block" aria-hidden="true" /> {label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
 
-      {ranked.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Spending by category</CardTitle>
-            <CardDescription>Select a category to see its purchases.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid items-center gap-4 md:grid-cols-[minmax(0,15rem)_1fr] md:gap-8">
-            <Suspense fallback={<div className="mx-auto size-57" aria-hidden="true" />}>
-              <CategoryChart groups={ranked} colors={colors} total={totals.purchase} />
-            </Suspense>
-            <ul className="grid w-full gap-1">
-              {ranked.map(({ category, count, amount }, index) => (
-                <li key={category}>
-                  <Button
-                    variant={filter === category ? 'secondary' : 'ghost'}
-                    className="h-auto w-full justify-start px-2 py-2.5 text-left hover:bg-accent"
-                    aria-pressed={filter === category}
-                    onClick={() => {
-                      setFilter(filter === category ? null : category)
-                      document.getElementById('transactions')?.scrollIntoView({ block: 'start' })
-                    }}
-                  >
-                    <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: colors[index] }} aria-hidden="true" />
-                    <span className="min-w-0 flex-1 truncate">{categoryLabels[category]}</span>
-                    <span className="hidden text-muted-foreground sm:inline">{count} {count === 1 ? 'purchase' : 'purchases'}</span>
-                    <span className="ml-2 tabular-nums">{formatAmount(amount)}</span>
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
+        <TabsContent value="overview" className={panelClass}>
+          <ReportOverview summary={summary} onViewCategories={() => changeTab('categories')} />
+        </TabsContent>
+
+        <TabsContent value="categories" className={`${panelClass} space-y-4`}>
           {(uncategorized || running || aiError) && (
-            <CardContent>
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted p-3 sm:px-4">
-                <div className="min-w-0 flex-1 text-sm text-muted-foreground" role="status">
-                  {running ? (
-                    download !== null ? (
-                      <>
-                        <span>Downloading Chrome’s on-device model</span>
-                        <Progress value={download * 100} aria-label="Model download" className="mt-2 max-w-sm" />
-                      </>
-                    ) : 'Grouping purchases on this device…'
-                  ) : aiError ? 'Local AI couldn’t finish. You can retry or edit categories below.'
-                    : availability === 'unavailable' ? 'Local AI is unavailable on this device. You can edit categories below.'
-                    : `${uncategorized?.count} ${uncategorized?.count === 1 ? 'purchase needs' : 'purchases need'} a category.`}
-                </div>
-                {aiSupported && (merchants.size > 0 || running) && (
-                  <Button variant="outline" onClick={() => { void improveCategories() }} disabled={running}>
-                    <Sparkles aria-hidden="true" /> Improve categories
-                  </Button>
-                )}
-              </div>
-            </CardContent>
+            <Alert role="status" className="flex flex-col gap-3 bg-muted/30 sm:flex-row sm:items-center sm:justify-between">
+              <AlertDescription className="min-w-0 flex-1">
+                {running ? (
+                  download !== null ? (
+                    <>
+                      <span>Downloading Chrome’s on-device model</span>
+                      <Progress value={download * 100} aria-label="Model download" className="mt-2 max-w-sm" />
+                    </>
+                  ) : 'Grouping purchases on this device…'
+                ) : aiError ? 'Local AI couldn’t finish. Retry or edit categories in Transactions.'
+                  : availability === 'unavailable' ? 'Local AI is unavailable on this device. You can edit categories in Transactions.'
+                  : `${uncategorized?.count} ${uncategorized?.count === 1 ? 'purchase needs' : 'purchases need'} a category.`}
+              </AlertDescription>
+              {aiSupported && (merchants.size > 0 || running) && (
+                <Button variant="outline" className="min-h-11" onClick={() => { void improveCategories() }} disabled={running}>
+                  <Sparkles aria-hidden="true" /> Improve categories
+                </Button>
+              )}
+            </Alert>
           )}
-        </Card>
-      )}
+          {ranked.length > 0 ? (
+            <Card className="min-w-0 [--card-spacing:--spacing(4)] sm:[--card-spacing:--spacing(6)]">
+              <CardHeader>
+                <CardTitle><h2>Spending by category</h2></CardTitle>
+                <CardDescription>Select a category to see its purchases.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid items-center gap-4 md:grid-cols-[minmax(0,14rem)_minmax(0,1fr)] md:gap-8">
+                <Suspense fallback={<Skeleton className="mx-auto aspect-square w-full max-w-56 rounded-full motion-reduce:animate-none" aria-hidden="true" />}>
+                  <CategoryChart groups={ranked} colors={colors} total={totals.purchase} />
+                </Suspense>
+                <ul className="min-w-0 divide-y">
+                  {ranked.map(({ category, count, amount }, index) => (
+                    <li key={category}>
+                      <Button
+                        variant={filter === category ? 'secondary' : 'ghost'}
+                        className="h-auto min-h-11 w-full justify-start gap-2 px-2 py-2.5 text-left whitespace-normal sm:gap-3"
+                        onClick={() => {
+                          setFilter(category)
+                          changeTab('transactions')
+                        }}
+                      >
+                        <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: colors[index] }} aria-hidden="true" />
+                        <span className="min-w-0 flex-1 wrap-anywhere">
+                          {categoryLabels[category]}
+                          <span className="block text-xs font-normal text-muted-foreground sm:text-sm">{count} {count === 1 ? 'purchase' : 'purchases'}</span>
+                        </span>
+                        <span className="max-w-[46%] text-right font-mono wrap-anywhere tabular-nums">{formatAmount(amount)}</span>
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          ) : (
+            <Empty className="border border-solid bg-card px-4 py-8">
+              <EmptyHeader>
+                <EmptyMedia variant="icon"><ChartPie aria-hidden="true" /></EmptyMedia>
+                <EmptyTitle><h2>No purchases this month</h2></EmptyTitle>
+                <EmptyDescription>Find payments, credits, and other card activity in Transactions.</EmptyDescription>
+              </EmptyHeader>
+              <EmptyContent>
+                <Button variant="outline" className="min-h-11" onClick={() => changeTab('transactions')}>View transactions</Button>
+              </EmptyContent>
+            </Empty>
+          )}
+        </TabsContent>
 
-      <Transactions
-        key={`${month}:${filter}`}
-        transactions={transactions}
-        category={filter}
-        onClear={() => setFilter(null)}
-        onEdit={(id, category) => setEdits((previous) => new Map(previous).set(id, category))}
-      />
+        <TabsContent value="transactions" className={panelClass}>
+          <Transactions
+            key={`${month}:${filter}`}
+            transactions={transactions}
+            category={filter}
+            onClear={() => setFilter(null)}
+            onEdit={(id, category) => setEdits((previous) => new Map(previous).set(id, category))}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
