@@ -132,7 +132,7 @@ export function Transactions({ transactions, category, onClear, onEdit }: {
                   </TableCell>
                   <TableCell className="py-3 pr-4 text-right align-top font-medium whitespace-normal wrap-anywhere tabular-nums sm:pr-6 md:align-middle">
                     {isCredit(transaction.kind) ? <span className="text-primary">+{formatAmount(transaction.amount)}</span> : formatAmount(transaction.amount)}
-                    <time dateTime={transaction.date} className="mt-1 block text-xs font-normal text-muted-foreground md:hidden">
+                    <time dateTime={transaction.date} className="mt-1 block text-sm font-normal text-muted-foreground md:hidden">
                       {formatDate(transaction.date)}
                     </time>
                   </TableCell>
@@ -149,12 +149,12 @@ export function Transactions({ transactions, category, onClear, onEdit }: {
       </CardContent>
       <Dialog open={editing !== null} onOpenChange={(open) => { if (!open) setEditing(null) }}>
         {editing && (
-          <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto p-4 sm:p-6" onCloseAutoFocus={(event) => {
+          <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto p-4 sm:p-6 [&>[data-slot=dialog-close]]:size-11" onCloseAutoFocus={(event) => {
             if (!editTrigger.current?.isConnected) return
             event.preventDefault()
             editTrigger.current.focus()
           }}>
-            <DialogHeader className="pr-7">
+            <DialogHeader className="pr-10">
               <DialogTitle>Change purchase category</DialogTitle>
               <DialogDescription className="wrap-anywhere">{editing.description}</DialogDescription>
             </DialogHeader>
@@ -163,9 +163,13 @@ export function Transactions({ transactions, category, onClear, onEdit }: {
               onEdit(editing.id, value)
               setEditing(null)
             }}>
-              <SelectTrigger aria-label="Purchase category" className="min-h-11 w-full min-w-0"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Purchase category" className="min-h-11 w-full min-w-0">
+                <SelectValue>{categoryLabels[editing.category]}</SelectValue>
+              </SelectTrigger>
               <SelectContent position="popper">
-                {categories.map((value) => <SelectItem key={value} value={value}>{categoryLabels[value]}</SelectItem>)}
+                {categories.map((value) => (
+                  <SelectItem key={value} value={value} className="min-h-11 md:min-h-0">{categoryLabels[value]}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </DialogContent>

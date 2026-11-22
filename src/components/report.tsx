@@ -107,10 +107,13 @@ export default function Report({ statement, onClear }: { statement: Statement; o
             setFilter(null)
           }}>
             <SelectTrigger aria-label="Report month" className="min-h-11 w-full min-w-0 bg-card sm:w-auto">
-              <CalendarDays aria-hidden="true" /><SelectValue />
+              <CalendarDays aria-hidden="true" />
+              <SelectValue>{formatMonth(month)}</SelectValue>
             </SelectTrigger>
             <SelectContent position="popper">
-              {months.map((month) => <SelectItem key={month} value={month}>{formatMonth(month)}</SelectItem>)}
+              {months.map((value) => (
+                <SelectItem key={value} value={value} className="min-h-11 md:min-h-0">{formatMonth(value)}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Button variant="outline" className="min-h-11" onClick={onClear}>Clear report</Button>
