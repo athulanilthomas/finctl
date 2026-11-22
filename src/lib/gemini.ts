@@ -1,5 +1,7 @@
 import { categories, categorize } from './categories.ts'
 import type { Category } from './categories.ts'
+import { defaultGeminiModel, geminiModelHeader } from './gemini-models.ts'
+import type { GeminiModel } from './gemini-models.ts'
 import type { Transaction } from './statement.ts'
 
 export const geminiBatchSize = 40
@@ -12,7 +14,8 @@ const geminiErrors = {
   preview_origin: 'This preview did not accept the request origin. Open the Vercel preview directly and try again.',
   quota: 'Gemini reached the quota for this key. Try again later.',
   invalid_batch: 'The finctl endpoint rejected this merchant batch.',
-  model_unavailable: 'The Gemini Flash-Lite model is unavailable to this Google project.',
+  invalid_model: 'This model is no longer offered in finctl. Choose another model.',
+  model_unavailable: 'This Gemini model is unavailable to your Google project. Choose another model to retry the remaining merchants.',
   request_rejected: 'Google rejected finctl’s categorization request.',
   incomplete: 'Gemini hit its token limit before finishing this batch.',
   blocked: 'Gemini blocked this batch under its content policies.',
@@ -65,11 +68,11 @@ export function isGeminiResult(value: unknown, count: number): value is number[]
     value.every((id) => Number.isInteger(id) && id >= 0 && id < geminiCategories.length)
 }
 
-export async function classifyWithGemini(names: string[], key: string, signal: AbortSignal) {
+export async function classifyWithGemini(names: string[], key: string, signal: AbortSignal, model: GeminiModel = defaultGeminiModel) {
   if (!/^[!-~]+$/.test(key)) throw new Error('Paste the Gemini API key without spaces or line breaks.')
   const response = await fetch('/api/gemini', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key, [geminiModelHeader]: model },
     body: JSON.stringify(names),
     signal,
   })

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { POST } from '../api/gemini.ts'
+import { geminiModelHeader } from '../src/lib/gemini-models.ts'
 import { classifyWithGemini, geminiBatchSize, geminiMerchantName, geminiMerchantNames, isGeminiResult } from '../src/lib/gemini.ts'
 import { parseStatement } from '../src/lib/statement.ts'
 
@@ -59,6 +60,26 @@ test('relays only names with a compact schema and validates Gemini responses', a
   assert.equal(isGeminiResult([1], 2), false)
 })
 
+test('routes selected models with their supported thinking level and a bounded output', async (t) => {
+  const stub = t.mock.method(globalThis, 'fetch', async () =>
+    Response.json({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '[3]' }] } }] }),
+  )
+  for (const model of ['gemini-4-hydrogen', 'gemini-4-neon']) {
+    const selection = request(['AMAZON'])
+    selection.headers.set(geminiModelHeader, model)
+    assert.deepEqual(await (await POST(selection)).json(), [3])
+    const [url, options] = stub.mock.calls.at(-1)?.arguments ?? []
+    assert.equal(url, `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`)
+    assert.ok(options)
+    assert.equal(new Headers(options.headers).has(geminiModelHeader), false)
+    const body = JSON.parse(String(options.body))
+    assert.deepEqual(body.contents, [{ parts: [{ text: '["AMAZON"]' }] }])
+    assert.equal(body.generationConfig.thinkingConfig.thinkingLevel, 'LOW')
+    assert.equal(body.generationConfig.maxOutputTokens, 1024)
+  }
+  assert.equal(stub.mock.callCount(), 2)
+})
+
 test('identifies truncated responses, blocks, invalid outputs, and upstream request failures', async (t) => {
   const stub = t.mock.method(globalThis, 'fetch', async () => Response.json({ candidates: [{ finishReason: 'MAX_TOKENS' }] }))
   assert.deepEqual(await (await POST(request(['AMAZON']))).json(), { error: 'incomplete' })
@@ -74,10 +95,17 @@ test('identifies truncated responses, blocks, invalid outputs, and upstream requ
   assert.deepEqual(await (await POST(request(['AMAZON']))).json(), { error: 'unavailable' })
 })
 
-test('rejects duplicate names, extra fields, or oversized requests before calling Gemini', async (t) => {
+test('rejects invalid merchant batches and unlisted models before calling Gemini', async (t) => {
   const stub = t.mock.method(globalThis, 'fetch', async () => { throw new Error('Unexpected request') })
   for (const body of [['AMAZON', 'AMAZON'], [{ name: 'AMAZON', amount: 100 }], ['STORE person@upi'], Array(geminiBatchSize + 1).fill('STORE')]) {
     assert.equal((await POST(request(body))).status, 400)
+  }
+  for (const model of ['__proto__', 'gemini-invalid', 'https://example.com/model']) {
+    const selection = request(['AMAZON'])
+    selection.headers.set(geminiModelHeader, model)
+    const response = await POST(selection)
+    assert.equal(response.status, 400)
+    assert.deepEqual(await response.json(), { error: 'invalid_model' })
   }
   assert.equal((await POST(request(['AMAZON'], 'https://different.test'))).status, 403)
   assert.equal(stub.mock.callCount(), 0)
@@ -126,11 +154,15 @@ test('uses the public preview origin and forwards credentials without assuming a
 })
 
 test('separates Vercel preview authentication from Google key and project errors', async (t) => {
-  const stub = t.mock.method(globalThis, 'fetch', async () => Response.json({
-    error: { message: 'Protected deployment', code: '401' },
-    message: 'Protected by Vercel Authentication',
-  }, { status: 401 }))
-  const classify = () => classifyWithGemini(['AMAZON'], key, new AbortController().signal)
+  const stub = t.mock.method(globalThis, 'fetch', async (_url: string, options: RequestInit) => {
+    assert.equal(new Headers(options.headers).get(geminiModelHeader), 'gemini-4-hydrogen')
+    assert.deepEqual(JSON.parse(String(options.body)), ['AMAZON'])
+    return Response.json({
+      error: { message: 'Protected deployment', code: '401' },
+      message: 'Protected by Vercel Authentication',
+    }, { status: 401 })
+  })
+  const classify = () => classifyWithGemini(['AMAZON'], key, new AbortController().signal, 'gemini-4-hydrogen')
   await assert.rejects(classify, /Vercel blocked the request/)
   stub.mock.mockImplementation(async () => Response.json({ error: 'preview_origin' }, { status: 403 }))
   await assert.rejects(classify, /preview did not accept the request origin/)
@@ -138,6 +170,8 @@ test('separates Vercel preview authentication from Google key and project errors
   await assert.rejects(classify, /Google could not authenticate this key/)
   stub.mock.mockImplementation(async () => Response.json({ error: 'project_access' }, { status: 403 }))
   await assert.rejects(classify, /Google denied this project access/)
+  stub.mock.mockImplementation(async () => Response.json({ error: 'model_unavailable' }, { status: 404 }))
+  await assert.rejects(classify, /Choose another model to retry the remaining merchants/)
   stub.mock.mockImplementation(async () => new Response('FUNCTION_INVOCATION_FAILED', { status: 500 }))
   await assert.rejects(classify, /Vercel could not run the Gemini endpoint \(HTTP 500\)/)
   stub.mock.mockImplementation(async () => Response.json({ error: 'incomplete' }, { status: 502 }))
