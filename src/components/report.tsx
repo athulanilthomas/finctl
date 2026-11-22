@@ -25,7 +25,7 @@ const reportTabs = [
   { value: 'categories', label: 'Categories', icon: ChartPie },
   { value: 'transactions', label: 'Transactions', icon: List },
 ] as const
-const panelClass = 'min-w-0 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1 motion-safe:duration-200'
+const panelClass = 'panel-enter min-w-0'
 
 export default function Report({ statement, onClear }: { statement: Statement; onClear: () => void }) {
   const months = useMemo(() => monthsIn(statement.transactions), [statement])
@@ -109,13 +109,13 @@ export default function Report({ statement, onClear }: { statement: Statement; o
   }
 
   return (
-    <div className="grid min-w-0 gap-5 sm:gap-7 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1 motion-safe:duration-200">
+    <div className="app-screen grid min-w-0 gap-5 sm:gap-7">
       <section className="grid gap-4 sm:flex sm:flex-wrap sm:items-end sm:justify-between sm:gap-5" aria-labelledby="report-title">
         <div className="min-w-0 space-y-2.5">
           <Badge variant="outline" className="h-7 gap-1.5 px-2.5 text-sm text-muted-foreground">
             <CreditCard aria-hidden="true" /> HDFC credit card
           </Badge>
-          <h1 id="report-title" className="text-[clamp(2rem,5.5vw,3.75rem)] leading-[1.04] font-semibold tracking-[-0.06em]">
+          <h1 id="report-title" tabIndex={-1} className="text-[clamp(2rem,5.5vw,3.75rem)] leading-[1.04] font-semibold tracking-[-0.06em] outline-none">
             Monthly spending
           </h1>
           <p className="text-sm text-muted-foreground sm:text-base">

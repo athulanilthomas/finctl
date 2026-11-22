@@ -40,6 +40,7 @@
 :root {
   color-scheme: light;
   --radius: 0.625rem;
+  --motion-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --background: oklch(1 0 0);
   --foreground: oklch(0% 0 0);
   --card: oklch(1 0 0);
@@ -103,11 +104,104 @@
   }
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  [data-native-screen-motion="false"] .app-screen {
+    animation: screen-enter 230ms var(--motion-ease-out);
+  }
+
+  .panel-enter:not([data-state="inactive"]) {
+    animation: panel-enter 180ms var(--motion-ease-out);
+  }
+
+  ::view-transition {
+    pointer-events: none;
+  }
+
+  ::view-transition-group(root) {
+    animation-duration: 0s;
+  }
+
+  ::view-transition-group(.screen-change) {
+    animation: none;
+  }
+
+  ::view-transition-old(.screen-change) {
+    animation: screen-exit 140ms ease-in both;
+    mix-blend-mode: normal;
+  }
+
+  ::view-transition-new(.screen-change) {
+    animation: screen-enter 240ms var(--motion-ease-out) both;
+    mix-blend-mode: normal;
+  }
+
+  [data-slot="dialog-overlay"][data-state="open"] {
+    animation: motion-fade-in 180ms ease-out;
+  }
+
+  [data-slot="dialog-overlay"][data-state="closed"] {
+    animation: motion-fade-out 140ms ease-in both;
+  }
+
+  [data-slot="dialog-content"][data-state="open"] {
+    animation: dialog-enter 220ms var(--motion-ease-out);
+  }
+
+  [data-slot="dialog-content"][data-state="closed"] {
+    animation: dialog-exit 140ms ease-in both;
+  }
+
+  [data-slot="dropdown-menu-content"][data-state="open"],
+  [data-slot="select-content"][data-align-trigger="false"][data-state="open"] {
+    animation: menu-enter 160ms var(--motion-ease-out);
+  }
+
+  [data-slot="dropdown-menu-content"][data-state="closed"],
+  [data-slot="select-content"][data-align-trigger="false"][data-state="closed"] {
+    animation: motion-fade-out 110ms ease-in both;
+  }
+}
+
+@keyframes screen-enter {
+  from { opacity: 0; transform: translate3d(0, 8px, 0); }
+}
+
+@keyframes screen-exit {
+  to { opacity: 0; transform: translate3d(0, -5px, 0); }
+}
+
+@keyframes panel-enter {
+  from { opacity: 0; transform: translate3d(0, 4px, 0); }
+}
+
+@keyframes dialog-enter {
+  from { opacity: 0; transform: translate3d(0, 8px, 0) scale(0.98); }
+}
+
+@keyframes dialog-exit {
+  to { opacity: 0; transform: translate3d(0, 4px, 0) scale(0.99); }
+}
+
+@keyframes menu-enter {
+  from { opacity: 0; transform: scale(0.98); }
+}
+
+@keyframes motion-fade-in {
+  from { opacity: 0; }
+}
+
+@keyframes motion-fade-out {
+  to { opacity: 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  [data-slot="dialog-overlay"],
-  [data-slot="dialog-content"],
-  [data-slot="dropdown-menu-content"],
-  [data-slot="select-content"] {
+  [data-slot="dropdown-menu-sub-content"] {
+    animation: none;
+  }
+
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
     animation: none;
   }
 }

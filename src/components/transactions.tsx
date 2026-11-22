@@ -127,7 +127,7 @@ export function Transactions({ transactions, category, onClear, onEdit }: {
                 <TableHead scope="col" className="w-[38%] pr-4 text-right sm:w-36 sm:pr-6">Amount</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
+            <TableBody key={`${view}:${currentPage}`} className="panel-enter">
               {rows.slice(start, end).map((transaction) => (
                 <TableRow key={transaction.id}>
                   <TableCell className="hidden pl-6 text-muted-foreground md:table-cell">

@@ -142,7 +142,7 @@ export function CategoryGrouping({ names, labels, uncategorized, browser, onBrow
             onComplete={() => setOpen(false)}
           />
         ) : (
-          <div className="grid min-w-0 gap-2.5">
+          <div className="panel-enter grid min-w-0 gap-2.5">
             <Button variant="outline" className={providerClass} aria-labelledby="browser-ai-title" aria-describedby="browser-ai-details" disabled={!browserReady} onClick={() => {
               onBrowser()
               setOpen(false)
