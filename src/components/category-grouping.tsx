@@ -10,6 +10,15 @@ import type { Category } from '@/lib/categories'
 const aiIconClass = 'grid size-10 shrink-0 place-items-center rounded-lg bg-linear-to-br from-(--chart-2)/20 to-(--chart-2)/5 text-blue-700 ring-1 ring-inset ring-(--chart-2)/25 dark:text-blue-300'
 const providerClass = 'h-auto min-w-0 justify-start gap-3 rounded-lg p-3 text-left whitespace-normal disabled:opacity-100 disabled:shadow-none motion-reduce:transition-none'
 const arrowClass = 'ml-auto size-4 motion-safe:transition-transform motion-safe:group-hover/button:translate-x-0.5'
+const geminiKeyStorage = 'finctl-gemini-key'
+
+function readGeminiKey() {
+  try {
+    return window.sessionStorage.getItem(geminiKeyStorage) || null
+  } catch {
+    return null
+  }
+}
 
 export function CategoryGrouping({ names, labels, uncategorized, browser, onBrowser, onGeminiBatch }: {
   names: string[]
@@ -27,24 +36,38 @@ export function CategoryGrouping({ names, labels, uncategorized, browser, onBrow
 }) {
   const [open, setOpen] = useState(false)
   const [gemini, setGemini] = useState(false)
+  const [savedKey, setSavedKey] = useState(readGeminiKey)
   const title = useRef<HTMLHeadingElement>(null)
   const { availability, hasMerchants, running, download, failed } = browser
   const completed = names.length > 0 && labels.size === names.length
   const browserReady = availability !== null && availability !== 'unavailable' && hasMerchants && !running
-  const geminiReady = names.length > 0 && !completed && !running
+  const geminiHasMerchants = names.length > 0 && !completed
+  const geminiReady = !running && (geminiHasMerchants || savedKey !== null)
   const browserDetails = running ? 'Grouping purchases on this device…'
     : availability === null ? 'Checking browser support…'
       : availability === 'unavailable' ? 'On-device AI is unavailable in this browser.'
         : hasMerchants ? 'Group uncategorized purchases this month. Data stays on this device.'
           : 'No remaining purchases to group this month.'
-  const geminiDetails = completed ? 'All eligible merchants in this statement have been reviewed.'
-    : names.length === 0 ? 'No eligible merchant names in this statement.'
-      : running ? 'Available when browser grouping finishes.'
-        : 'Group merchants across the statement using your Gemini API key.'
+  const geminiDetails = running ? 'Available when browser grouping finishes.'
+    : geminiHasMerchants ? 'Group merchants across the statement using your Gemini API key.'
+      : savedKey ? 'Manage the API key saved for this tab.'
+        : completed ? 'All eligible merchants in this statement have been reviewed.'
+          : 'No eligible merchant names in this statement.'
 
   useEffect(() => {
     if (open) title.current?.focus()
   }, [open, gemini])
+
+  function changeSavedKey(key: string | null) {
+    try {
+      if (key === null) window.sessionStorage.removeItem(geminiKeyStorage)
+      else window.sessionStorage.setItem(geminiKeyStorage, key)
+      setSavedKey(key)
+      return true
+    } catch {
+      return false
+    }
+  }
 
   if (!names.length && !uncategorized && !running && !failed) return null
 
@@ -97,16 +120,24 @@ export function CategoryGrouping({ names, labels, uncategorized, browser, onBrow
         <DialogHeader>
           <span aria-hidden="true" className={`${aiIconClass} mb-1`}><Sparkles className="size-[18px]" /></span>
           <DialogTitle ref={title} tabIndex={-1} className="text-xl leading-tight font-semibold tracking-tight outline-none">
-            {gemini ? 'Group with Gemini' : 'Group with AI'}
+            {gemini ? (geminiHasMerchants ? 'Group with Gemini' : 'Manage Gemini key') : 'Group with AI'}
           </DialogTitle>
           <DialogDescription>
-            {gemini
-              ? 'The merchant names shown here go through finctl’s Vercel endpoint to Google. The PDF and transaction details stay in your browser. Your key is used for this run.'
-              : 'Choose how to group your purchases.'}
+            {!gemini ? 'Choose how to group your purchases.'
+              : geminiHasMerchants ? 'The merchant names shown here go through finctl’s Vercel endpoint to Google. The PDF and transaction details stay in your browser.'
+                : 'The key stays available after refreshing this tab, until you forget it or the session ends.'}
           </DialogDescription>
         </DialogHeader>
         {gemini ? open && (
-          <GeminiCategories names={names} labels={labels} onBatch={onGeminiBatch} onBack={() => setGemini(false)} onComplete={() => setOpen(false)} />
+          <GeminiCategories
+            names={names}
+            labels={labels}
+            savedKey={savedKey}
+            onSavedKeyChange={changeSavedKey}
+            onBatch={onGeminiBatch}
+            onBack={() => setGemini(false)}
+            onComplete={() => setOpen(false)}
+          />
         ) : (
           <div className="grid min-w-0 gap-2.5">
             <Button variant="outline" className={providerClass} aria-labelledby="browser-ai-title" aria-describedby="browser-ai-details" disabled={!browserReady} onClick={() => {
