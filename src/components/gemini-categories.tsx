@@ -84,7 +84,7 @@ export function GeminiCategories({ names, labels, savedKey, onSavedKeyChange, on
   }
 
   return (
-    <form onSubmit={submit} autoComplete="off" className="grid min-w-0 gap-3 sm:gap-5">
+    <form onSubmit={submit} autoComplete="off" className="panel-enter grid min-w-0 gap-3 sm:gap-5">
       {working ? (
         <div className="grid gap-2 rounded-lg border bg-muted/30 p-3" role="status">
           <p className="font-medium tabular-nums">{completed} of {names.length} merchants reviewed</p>

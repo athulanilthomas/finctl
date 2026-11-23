@@ -3,7 +3,7 @@ import { CalendarDays, ChartPie, CircleAlert, CreditCard, LayoutDashboard, List 
 import { CategoryGrouping } from '@/components/category-grouping'
 import { ReportOverview } from '@/components/report-overview'
 import { Transactions } from '@/components/transactions'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -25,7 +25,7 @@ const reportTabs = [
   { value: 'categories', label: 'Categories', icon: ChartPie },
   { value: 'transactions', label: 'Transactions', icon: List },
 ] as const
-const panelClass = 'min-w-0 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1 motion-safe:duration-200'
+const panelClass = 'panel-enter min-w-0'
 
 export default function Report({ statement, onClear }: { statement: Statement; onClear: () => void }) {
   const months = useMemo(() => monthsIn(statement.transactions), [statement])
@@ -109,13 +109,13 @@ export default function Report({ statement, onClear }: { statement: Statement; o
   }
 
   return (
-    <div className="grid min-w-0 gap-5 sm:gap-7 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1 motion-safe:duration-200">
+    <div className="app-screen grid min-w-0 gap-5 sm:gap-7">
       <section className="grid gap-4 sm:flex sm:flex-wrap sm:items-end sm:justify-between sm:gap-5" aria-labelledby="report-title">
         <div className="min-w-0 space-y-2.5">
           <Badge variant="outline" className="h-7 gap-1.5 px-2.5 text-sm text-muted-foreground">
             <CreditCard aria-hidden="true" /> HDFC credit card
           </Badge>
-          <h1 id="report-title" className="text-[clamp(2rem,5.5vw,3.75rem)] leading-[1.04] font-semibold tracking-[-0.06em]">
+          <h1 id="report-title" tabIndex={-1} className="text-[clamp(2rem,5.5vw,3.75rem)] leading-[1.04] font-semibold tracking-[-0.06em] outline-none">
             Monthly spending
           </h1>
           <p className="text-sm text-muted-foreground sm:text-base">
@@ -141,13 +141,26 @@ export default function Report({ statement, onClear }: { statement: Statement; o
         </div>
       </section>
 
-      {(statement.unreadRows > 0 || statement.totalsMismatch) && (
+      {(statement.unreadRows > 0 || statement.totalDifferences.length > 0) && (
         <Alert variant="destructive">
           <CircleAlert aria-hidden="true" />
-          <AlertDescription>
-            {statement.unreadRows > 0 && `${statement.unreadRows} transaction ${statement.unreadRows === 1 ? 'row could' : 'rows could'} not be read. `}
-            {statement.totalsMismatch && 'The parsed activity differs from the totals printed on the statement. '}
-            Check the PDF before relying on this report.
+          <AlertTitle>Check this statement</AlertTitle>
+          <AlertDescription className="col-start-2 grid min-w-0 gap-1.5">
+            {statement.unreadRows > 0 && (
+              <div className="text-muted-foreground">
+                {statement.unreadRows} transaction {statement.unreadRows === 1 ? 'row could' : 'rows could'} not be read.
+              </div>
+            )}
+            {statement.totalDifferences.length > 0 && (
+              <dl className="grid gap-x-6 gap-y-1.5 sm:flex sm:flex-wrap">
+                {statement.totalDifferences.map(({ kind, read, printed }) => (
+                  <div key={kind}>
+                    <dt className="font-medium text-foreground">{kind === 'charges' ? 'Charges' : 'Payments and credits'}</dt>
+                    <dd className="text-muted-foreground tabular-nums">{formatAmount(read)} read · {formatAmount(printed)} on the PDF</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
           </AlertDescription>
         </Alert>
       )}

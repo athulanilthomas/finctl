@@ -24,11 +24,12 @@ export type Transaction = {
 export type Statement = {
   transactions: Transaction[]
   unreadRows: number
-  totalsMismatch: boolean
+  totalDifferences: { kind: 'charges' | 'credits'; read: number; printed: number }[]
 }
 
 const dateStart = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4}|\d{2})\b(?:\s*\|?\s*\d{1,2}:\d{2}(?::\d{2})?)?\s*\|?\s*/
-const amountEnd = /(?:^|\s)(?<sign>[+−-])?\s*(?<currency>₹|INR|RS\.?|C|`)?\s*(?<value>\d[\d,]*\.\d{2})(?:\s*(?<marker>[+−-]|CR\.?|DR\.?|CREDIT|DEBIT))?(?:\s+[lI•●])?$/i
+const amountEnd = /(?:^|\s)(?<sign>[+−-])?\s*(?<currency>₹|INR|RS\.?|C|`)?\s*(?<amountSign>[+−-])?\s*(?<value>\d[\d,]*\.\d{2})(?:\s*(?<marker>[+−-]|CR\.?|DR\.?|CREDIT|DEBIT))?(?:\s+[lI•●])?$/i
+const wrappedDirection = /^(CR\.?|DR\.?|CREDIT|DEBIT)(?:\s+[lI•●])?$/i
 const tableStart = /^(?:domestic|international)\s+(?:retail\s+)?transactions\b|^\s*(?:transaction\s+)?date\b.*\b(?:description|particulars|details)\b.*\bamount\b/i
 const tableEnd = /^(?:transactions total amount|eligible for emi|important information|terms\s*(?:&|and)\s*conditions|payment options|reward points summary|offers on your card)\b/i
 const pageFooter = /^page\s+\d+\s+of\s+\d+\b/i
@@ -56,9 +57,9 @@ function parseRow(id: number, date: string | null, parts: string[]): Transaction
     const match = amountEnd.exec(part)
     if (!match?.groups) continue
     const prefix = part.slice(0, match.index)
-    const { currency, value, sign, marker } = match.groups
+    const { currency, value, sign, amountSign, marker } = match.groups
     if (!currency && /(?:\b(?:USD|EUR|GBP|AUD|SGD|JPY|CAD|AED)|[$€£])\s*$/i.test(prefix)) continue
-    fields.push({ index, prefix, currency, value, sign, marker })
+    fields.push({ index, prefix, currency, value, sign: sign ?? amountSign, marker })
   }
 
   const field = fields.findLast(({ currency }) => currency) ?? fields.at(-1)
@@ -74,7 +75,7 @@ function parseRow(id: number, date: string | null, parts: string[]): Transaction
   if (!description || !Number.isSafeInteger(amount)) return null
 
   const base = { id, date, description, amount }
-  const direction = marker?.toUpperCase()
+  const direction = (marker ?? parts[index + 1]?.match(wrappedDirection)?.[1])?.toUpperCase()
   const isCredit = direction ? /^(?:CR|[+−-])/.test(direction) : Boolean(sign)
 
   if (isCredit) return { ...base, kind: payment.test(description) ? 'payment' : 'credit' }
@@ -85,9 +86,9 @@ function parseRow(id: number, date: string | null, parts: string[]): Transaction
   return { ...base, kind: 'purchase', merchant, category: categorize(merchant) }
 }
 
-function matchPrintedTotals(lines: string[], transactions: Transaction[]) {
+function comparePrintedTotals(lines: string[], transactions: Transaction[]): Statement['totalDifferences'] {
   const header = lines.findIndex((line) => /previous statement dues/i.test(line))
-  if (header === -1) return true
+  if (header === -1) return []
 
   for (const line of lines.slice(header + 1, header + 6)) {
     const amounts = line.match(/\d[\d,]*\.\d{2}/g)
@@ -102,10 +103,14 @@ function matchPrintedTotals(lines: string[], transactions: Transaction[]) {
       if (kind === 'credit' || kind === 'payment') actualCredits += amount
       else actualCharges += amount
     }
-    return actualCredits === credits && actualCharges === charges + interest
+    const differences: Statement['totalDifferences'] = []
+    const printedCharges = charges + interest
+    if (actualCharges !== printedCharges) differences.push({ kind: 'charges', read: actualCharges, printed: printedCharges })
+    if (actualCredits !== credits) differences.push({ kind: 'credits', read: actualCredits, printed: credits })
+    return differences
   }
 
-  return true
+  return []
 }
 
 export function parseStatement(pages: string[][]): Statement {
@@ -160,6 +165,6 @@ export function parseStatement(pages: string[][]): Statement {
   return {
     transactions: transactions.sort((a, b) => b.date.localeCompare(a.date)),
     unreadRows,
-    totalsMismatch: !matchPrintedTotals(pages[0], transactions),
+    totalDifferences: comparePrintedTotals(pages[0], transactions),
   }
 }
