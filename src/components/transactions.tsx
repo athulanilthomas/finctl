@@ -194,7 +194,7 @@ export function Transactions({ transactions, category, onClear, onEdit }: {
               <SelectTrigger aria-label="Purchase category" className="min-h-11 w-full min-w-0">
                 <SelectValue>{categoryLabels[editing.category]}</SelectValue>
               </SelectTrigger>
-              <SelectContent position="popper">
+              <SelectContent>
                 {categories.map((value) => (
                   <SelectItem key={value} value={value} className="min-h-11 md:min-h-0">{categoryLabels[value]}</SelectItem>
                 ))}

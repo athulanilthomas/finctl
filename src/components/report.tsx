@@ -131,7 +131,7 @@ export default function Report({ statement, onClear }: { statement: Statement; o
               <CalendarDays aria-hidden="true" />
               <SelectValue>{wholeStatement ? 'All months' : formatMonth(period)}</SelectValue>
             </SelectTrigger>
-            <SelectContent position="popper" className="[&_[data-radix-select-viewport]]:h-auto">
+            <SelectContent>
               <SelectItem value={allMonths} className="min-h-11 md:min-h-0">All months</SelectItem>
               {months.map((value) => (
                 <SelectItem key={value} value={value} className="min-h-11 md:min-h-0">{formatMonth(value)}</SelectItem>

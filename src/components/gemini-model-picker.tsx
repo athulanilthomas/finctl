@@ -34,7 +34,7 @@ export function GeminiModelPicker({ model, onChange }: { model: GeminiModel; onC
             <CostBadge cost={selected.cost} />
           </SelectValue>
         </SelectTrigger>
-        <SelectContent position="popper" align="start" sideOffset={4} className="w-(--radix-select-trigger-width) [&_[data-radix-select-viewport]]:h-auto">
+        <SelectContent align="start" className="w-(--radix-select-trigger-width)">
           <SelectGroup>
             <SelectLabel>Paid rates in USD per 1M tokens</SelectLabel>
             {modelIds.map((id) => {
