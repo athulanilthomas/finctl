@@ -49,11 +49,12 @@ export function Transactions({ transactions, category, onClear, onEdit }: {
   transactions: Transaction[]
   category: Category | null
   onClear: () => void
-  onEdit: (id: number, category: Category) => void
+  onEdit: (ids: number[], category: Category) => void
 }) {
   const [view, setView] = useState('all')
   const [page, setPage] = useState(0)
   const [editing, setEditing] = useState<Purchase | null>(null)
+  const [editScope, setEditScope] = useState('merchant')
   const editTrigger = useRef<HTMLButtonElement>(null)
   const title = useRef<HTMLHeadingElement>(null)
 
@@ -67,9 +68,14 @@ export function Transactions({ transactions, category, onClear, onEdit }: {
   const currentPage = Math.min(page, Math.max(0, pageCount - 1))
   const start = currentPage * pageSize
   const end = Math.min(start + pageSize, rows.length)
+  const matchingIds = editing?.category === 'uncategorized' && editing.merchant
+    ? transactions.filter((transaction) => transaction.id !== editing.id && transaction.kind === 'purchase' &&
+      transaction.category === 'uncategorized' && transaction.merchant === editing.merchant).map(({ id }) => id)
+    : []
 
   function openEditor(transaction: Purchase, trigger: HTMLButtonElement) {
     editTrigger.current = trigger
+    setEditScope('merchant')
     setEditing(transaction)
   }
 
@@ -186,9 +192,27 @@ export function Transactions({ transactions, category, onClear, onEdit }: {
               <DialogTitle>Change purchase category</DialogTitle>
               <DialogDescription className="wrap-anywhere">{editing.description}</DialogDescription>
             </DialogHeader>
+            {matchingIds.length > 0 && (
+              <div className="grid gap-2">
+                <p className="text-sm font-medium">Apply to</p>
+                <ToggleGroup
+                  type="single"
+                  variant="outline"
+                  spacing={0}
+                  className="grid w-full grid-cols-2 items-stretch"
+                  aria-label="Apply category to"
+                  value={editScope}
+                  onValueChange={(value) => { if (value) setEditScope(value) }}
+                >
+                  <ToggleGroupItem value="merchant" className="h-auto min-h-11 py-1 leading-tight whitespace-normal">All {matchingIds.length + 1} purchases</ToggleGroupItem>
+                  <ToggleGroupItem value="purchase" className="h-auto min-h-11 py-1 leading-tight whitespace-normal">Only this purchase</ToggleGroupItem>
+                </ToggleGroup>
+                <p className="text-xs text-muted-foreground">Matches uncategorized purchases from this merchant in the selected period.</p>
+              </div>
+            )}
             <Select value={editing.category} onValueChange={(value) => {
               if (!isCategory(value)) return
-              onEdit(editing.id, value)
+              onEdit(editScope === 'merchant' ? [editing.id, ...matchingIds] : [editing.id], value)
               setEditing(null)
             }}>
               <SelectTrigger aria-label="Purchase category" className="min-h-11 w-full min-w-0">

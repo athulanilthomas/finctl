@@ -43,7 +43,6 @@ export default function Report({ statement, onClear }: { statement: Statement; o
   const aiRun = useRef<AbortController | null>(null)
   const tabs = useRef<HTMLDivElement>(null)
   const merchantNames = useMemo(() => geminiMerchantNames(statement.transactions), [statement])
-  const cloudNames = useMemo(() => [...new Set(merchantNames.values())], [merchantNames])
 
   useEffect(() => {
     let cancelled = false
@@ -54,28 +53,33 @@ export default function Report({ statement, onClear }: { statement: Statement; o
     }
   }, [])
 
-  const transactions = useMemo(() => transactionsForPeriod(statement.transactions, period)
-    .map((transaction) => {
+  const { transactions, cloudNames, merchants } = useMemo(() => {
+    const cloudNames = new Map<string, number>()
+    const merchants = new Set<string>()
+    const transactions = transactionsForPeriod(statement.transactions, period).map((transaction) => {
       if (transaction.kind !== 'purchase') return transaction
+      const edit = edits.get(transaction.id)
+      if (edit) return { ...transaction, category: edit }
+      if (transaction.category !== 'uncategorized') return transaction
+
+      const local = modelLabels.get(transaction.merchant)
+      if (local && local !== 'uncategorized') return { ...transaction, category: local }
+
       const name = merchantNames.get(transaction.id)
-      return {
-        ...transaction,
-        category: edits.get(transaction.id) ?? (name ? geminiLabels.get(name) : undefined) ??
-          modelLabels.get(transaction.merchant) ?? transaction.category,
+      if (name) {
+        cloudNames.set(name, (cloudNames.get(name) ?? 0) + 1)
+        const label = geminiLabels.get(name)
+        if (label && label !== 'uncategorized') return { ...transaction, category: label }
       }
-    }), [statement, period, edits, modelLabels, geminiLabels, merchantNames])
+      if (transaction.merchant.length >= 3 && !local) merchants.add(transaction.merchant)
+      return transaction
+    })
+    return { transactions, cloudNames, merchants }
+  }, [statement, period, edits, modelLabels, geminiLabels, merchantNames])
 
   const summary = useMemo(() => summarize(transactions), [transactions])
   const { totals, ranked, uncategorized } = summary
   const colors = ranked.map(({ category }, index) => category === 'uncategorized' ? 'var(--muted-foreground)' : chartColors[index % chartColors.length])
-  const merchants = new Set<string>()
-  for (const transaction of transactions) {
-    if (transaction.kind !== 'purchase' || transaction.category !== 'uncategorized') continue
-    const { id, merchant } = transaction
-    const name = merchantNames.get(id)
-    if (name && geminiLabels.has(name)) continue
-    if (merchant.length >= 3 && !edits.has(id) && !modelLabels.has(merchant)) merchants.add(merchant)
-  }
   function changeTab(value: string) {
     setTab(value)
     const navigation = tabs.current
@@ -248,7 +252,11 @@ export default function Report({ statement, onClear }: { statement: Statement; o
             transactions={transactions}
             category={filter}
             onClear={() => setFilter(null)}
-            onEdit={(id, category) => setEdits((previous) => new Map(previous).set(id, category))}
+            onEdit={(ids, category) => setEdits((previous) => {
+              const updated = new Map(previous)
+              for (const id of ids) updated.set(id, category)
+              return updated
+            })}
           />
         </TabsContent>
       </Tabs>
