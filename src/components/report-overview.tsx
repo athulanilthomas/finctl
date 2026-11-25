@@ -54,7 +54,7 @@ export function ReportOverview({ summary, onViewCategories }: {
             </>
           ) : (
             <p className="text-base text-muted-foreground">
-              {uncategorized ? 'Categorize a purchase to see your largest category.' : 'No purchases this month.'}
+              {uncategorized ? 'Categorize a purchase to see your largest category.' : 'No purchases in this period.'}
             </p>
           )}
         </CardContent>

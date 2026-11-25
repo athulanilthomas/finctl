@@ -15,7 +15,7 @@ import { categoryLabels } from '@/lib/categories'
 import type { Category } from '@/lib/categories'
 import { geminiMerchantNames } from '@/lib/gemini'
 import { groupMerchants, localAiAvailability } from '@/lib/local-ai'
-import { formatAmount, formatMonth, formatRange, monthsIn, summarize } from '@/lib/report'
+import { allMonths, formatAmount, formatMonth, formatRange, monthsIn, summarize, transactionsForPeriod } from '@/lib/report'
 import type { Statement } from '@/lib/statement'
 
 const CategoryChart = lazy(() => import('@/components/category-chart'))
@@ -29,7 +29,8 @@ const panelClass = 'panel-enter min-w-0'
 
 export default function Report({ statement, onClear }: { statement: Statement; onClear: () => void }) {
   const months = useMemo(() => monthsIn(statement.transactions), [statement])
-  const [month, setMonth] = useState(months[0])
+  const [period, setPeriod] = useState(months[0])
+  const wholeStatement = period === allMonths
   const [tab, setTab] = useState('overview')
   const [filter, setFilter] = useState<Category | null>(null)
   const [edits, setEdits] = useState(() => new Map<number, Category>())
@@ -53,8 +54,7 @@ export default function Report({ statement, onClear }: { statement: Statement; o
     }
   }, [])
 
-  const transactions = useMemo(() => statement.transactions
-    .filter(({ date }) => date.startsWith(month))
+  const transactions = useMemo(() => transactionsForPeriod(statement.transactions, period)
     .map((transaction) => {
       if (transaction.kind !== 'purchase') return transaction
       const name = merchantNames.get(transaction.id)
@@ -63,7 +63,7 @@ export default function Report({ statement, onClear }: { statement: Statement; o
         category: edits.get(transaction.id) ?? (name ? geminiLabels.get(name) : undefined) ??
           modelLabels.get(transaction.merchant) ?? transaction.category,
       }
-    }), [statement, month, edits, modelLabels, geminiLabels, merchantNames])
+    }), [statement, period, edits, modelLabels, geminiLabels, merchantNames])
 
   const summary = useMemo(() => summarize(transactions), [transactions])
   const { totals, ranked, uncategorized } = summary
@@ -116,22 +116,23 @@ export default function Report({ statement, onClear }: { statement: Statement; o
             <CreditCard aria-hidden="true" /> HDFC credit card
           </Badge>
           <h1 id="report-title" tabIndex={-1} className="text-[clamp(2rem,5.5vw,3.75rem)] leading-[1.04] font-semibold tracking-[-0.06em] outline-none">
-            Monthly spending
+            {wholeStatement ? 'Statement spending' : 'Monthly spending'}
           </h1>
           <p className="text-sm text-muted-foreground sm:text-base">
-            Transactions from {formatRange(transactions[transactions.length - 1].date, transactions[0].date)}, {month.slice(0, 4)}
+            Transactions from {formatRange(transactions[transactions.length - 1].date, transactions[0].date)}
           </p>
         </div>
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex">
-          <Select value={month} onValueChange={(value) => {
-            setMonth(value)
+          <Select value={period} onValueChange={(value) => {
+            setPeriod(value)
             setFilter(null)
           }}>
-            <SelectTrigger aria-label="Report month" className="min-h-11 w-full min-w-0 bg-card sm:w-auto">
+            <SelectTrigger aria-label="Report period" className="min-h-11 w-full min-w-0 bg-card sm:w-auto">
               <CalendarDays aria-hidden="true" />
-              <SelectValue>{formatMonth(month)}</SelectValue>
+              <SelectValue>{wholeStatement ? 'All months' : formatMonth(period)}</SelectValue>
             </SelectTrigger>
-            <SelectContent position="popper">
+            <SelectContent position="popper" className="[&_[data-radix-select-viewport]]:h-auto">
+              <SelectItem value={allMonths} className="min-h-11 md:min-h-0">All months</SelectItem>
               {months.map((value) => (
                 <SelectItem key={value} value={value} className="min-h-11 md:min-h-0">{formatMonth(value)}</SelectItem>
               ))}
@@ -231,7 +232,7 @@ export default function Report({ statement, onClear }: { statement: Statement; o
             <Empty className="border border-solid bg-card px-4 py-8">
               <EmptyHeader>
                 <EmptyMedia variant="icon"><ChartPie aria-hidden="true" /></EmptyMedia>
-                <EmptyTitle><h2>No purchases this month</h2></EmptyTitle>
+                <EmptyTitle><h2>No purchases</h2></EmptyTitle>
                 <EmptyDescription>Find payments, credits, and other card activity in Transactions.</EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
@@ -243,7 +244,7 @@ export default function Report({ statement, onClear }: { statement: Statement; o
 
         <TabsContent value="transactions" className={panelClass}>
           <Transactions
-            key={`${month}:${filter}`}
+            key={`${period}:${filter}`}
             transactions={transactions}
             category={filter}
             onClear={() => setFilter(null)}
