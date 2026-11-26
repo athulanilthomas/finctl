@@ -69,6 +69,23 @@ test('summarizes all statement activity across months and years', () => {
   assert.match(formatRange('2025-12-31', '2026-01-08'), /2025.*2026/)
 })
 
+test('matches repeat purchases with different channel and reference details', () => {
+  const { transactions } = parseStatement([[
+    title,
+    'Domestic Transactions',
+    columns,
+    '08/01/2026 NOVA MART C 12.00',
+    '09/01/2026 NOVA MART POS C 13.00',
+    '10/01/2026 POS - NOVA MART (AUTH 987654) C 14.00',
+    '11/01/2026 ECOM - NOVA MART C 15.00',
+    '12/01/2026 NOVA MART EAST C 16.00',
+  ]])
+
+  assert.deepEqual(transactions.map((row) => row.kind === 'purchase' ? row.merchant : null), [
+    'NOVA MART EAST', 'NOVA MART', 'NOVA MART', 'NOVA MART', 'NOVA MART',
+  ])
+})
+
 test('checks activity against printed statement totals when present', () => {
   const lines = [
     title,

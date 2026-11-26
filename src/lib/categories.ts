@@ -35,10 +35,18 @@ const merchantRules: [Category, RegExp][] = [
   ['shopping', /\b(?:amazon(?! pay\b)|amzn|flipkart|myntra|ajio|nykaa|ikea|decathlon)\b/i],
 ]
 
-export function merchantKey(description: string) {
+export function stripMerchantMetadata(description: string) {
   return description
-    .replace(/^\s*upi\s*[-:/ ]\s*/i, '')
-    .replace(/\(\s*ref\b[^)]*\)/gi, ' ')
+    .replace(/^(?:UPI|POS|ECOM)\s*[-:/ ]\s*/i, '')
+    .replace(/\(\s*(?:REF|REFERENCE|UTR|RRN|TXN|AUTH)\b[^)]*\)/gi, ' ')
+    .replace(/\s+\b(?:REF|REFERENCE|UTR|RRN|TXN|AUTH|MID|TID)\s*[:#-]?\s*[A-Z0-9-]*\d[A-Z0-9-]*\s*$/i, '')
+    .replace(/\s+\b(?:USD|EUR|GBP|AED|AUD|CAD|SGD|JPY|INR)\s+[\d,.]+$/i, '')
+    .replace(/\s+\d{5,}$/g, '')
+    .replace(/\s+(?:POS|ECOM)\s*$/i, '')
+}
+
+export function merchantKey(description: string) {
+  return stripMerchantMetadata(description.normalize('NFKC').trim())
     .replace(/\b(?:ref|txn|utr)\s*[:#-]?\s*\d+\b/gi, ' ')
     .replace(/[\w.+-]+@[\w.-]+|\b\d{5,}\b/g, ' ')
     .replace(/\s+/g, ' ')
