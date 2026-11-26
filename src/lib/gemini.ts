@@ -1,4 +1,4 @@
-import { categories, categorize } from './categories.ts'
+import { categories, categorize, stripMerchantMetadata } from './categories.ts'
 import type { Category } from './categories.ts'
 import { defaultGeminiModel, geminiModelHeader } from './gemini-models.ts'
 import type { GeminiModel } from './gemini-models.ts'
@@ -37,13 +37,7 @@ export function isGeminiMerchantName(value: unknown): value is string {
 export function geminiMerchantName(description: string): string | null {
   const raw = description.normalize('NFKC').trim()
   const upi = /^UPI\b/i.test(raw)
-  const name = raw
-    .replace(/^(?:UPI|POS|ECOM)\s*[-:/ ]\s*/i, '')
-    .replace(/\(\s*(?:REF|REFERENCE|UTR|RRN|TXN|AUTH)\b[^)]*\)/gi, ' ')
-    .replace(/\s+\b(?:REF|REFERENCE|UTR|RRN|TXN|AUTH|MID|TID)\s*[:#-]?\s*[A-Z0-9-]*\d[A-Z0-9-]*\s*$/i, '')
-    .replace(/\s+\b(?:USD|EUR|GBP|AED|AUD|CAD|SGD|JPY|INR)\s+[\d,.]+$/i, '')
-    .replace(/\s+\d{5,}$/g, '')
-    .replace(/\s+(?:POS|ECOM)\s*$/i, '')
+  const name = stripMerchantMetadata(raw)
     .replace(/\s+/g, ' ')
     .trim()
     .toUpperCase()

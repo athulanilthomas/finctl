@@ -15,7 +15,7 @@ import { categoryLabels } from '@/lib/categories'
 import type { Category } from '@/lib/categories'
 import { geminiMerchantNames } from '@/lib/gemini'
 import { groupMerchants, localAiAvailability } from '@/lib/local-ai'
-import { formatAmount, formatMonth, formatRange, monthsIn, summarize } from '@/lib/report'
+import { allMonths, formatAmount, formatMonth, formatRange, monthsIn, summarize, transactionsForPeriod } from '@/lib/report'
 import type { Statement } from '@/lib/statement'
 
 const CategoryChart = lazy(() => import('@/components/category-chart'))
@@ -29,7 +29,8 @@ const panelClass = 'panel-enter min-w-0'
 
 export default function Report({ statement, onClear }: { statement: Statement; onClear: () => void }) {
   const months = useMemo(() => monthsIn(statement.transactions), [statement])
-  const [month, setMonth] = useState(months[0])
+  const [period, setPeriod] = useState(months[0])
+  const wholeStatement = period === allMonths
   const [tab, setTab] = useState('overview')
   const [filter, setFilter] = useState<Category | null>(null)
   const [edits, setEdits] = useState(() => new Map<number, Category>())
@@ -42,7 +43,6 @@ export default function Report({ statement, onClear }: { statement: Statement; o
   const aiRun = useRef<AbortController | null>(null)
   const tabs = useRef<HTMLDivElement>(null)
   const merchantNames = useMemo(() => geminiMerchantNames(statement.transactions), [statement])
-  const cloudNames = useMemo(() => [...new Set(merchantNames.values())], [merchantNames])
 
   useEffect(() => {
     let cancelled = false
@@ -53,29 +53,33 @@ export default function Report({ statement, onClear }: { statement: Statement; o
     }
   }, [])
 
-  const transactions = useMemo(() => statement.transactions
-    .filter(({ date }) => date.startsWith(month))
-    .map((transaction) => {
+  const { transactions, cloudNames, merchants } = useMemo(() => {
+    const cloudNames = new Map<string, number>()
+    const merchants = new Set<string>()
+    const transactions = transactionsForPeriod(statement.transactions, period).map((transaction) => {
       if (transaction.kind !== 'purchase') return transaction
+      const edit = edits.get(transaction.id)
+      if (edit) return { ...transaction, category: edit }
+      if (transaction.category !== 'uncategorized') return transaction
+
+      const local = modelLabels.get(transaction.merchant)
+      if (local && local !== 'uncategorized') return { ...transaction, category: local }
+
       const name = merchantNames.get(transaction.id)
-      return {
-        ...transaction,
-        category: edits.get(transaction.id) ?? (name ? geminiLabels.get(name) : undefined) ??
-          modelLabels.get(transaction.merchant) ?? transaction.category,
+      if (name) {
+        cloudNames.set(name, (cloudNames.get(name) ?? 0) + 1)
+        const label = geminiLabels.get(name)
+        if (label && label !== 'uncategorized') return { ...transaction, category: label }
       }
-    }), [statement, month, edits, modelLabels, geminiLabels, merchantNames])
+      if (transaction.merchant.length >= 3 && !local) merchants.add(transaction.merchant)
+      return transaction
+    })
+    return { transactions, cloudNames, merchants }
+  }, [statement, period, edits, modelLabels, geminiLabels, merchantNames])
 
   const summary = useMemo(() => summarize(transactions), [transactions])
   const { totals, ranked, uncategorized } = summary
   const colors = ranked.map(({ category }, index) => category === 'uncategorized' ? 'var(--muted-foreground)' : chartColors[index % chartColors.length])
-  const merchants = new Set<string>()
-  for (const transaction of transactions) {
-    if (transaction.kind !== 'purchase' || transaction.category !== 'uncategorized') continue
-    const { id, merchant } = transaction
-    const name = merchantNames.get(id)
-    if (name && geminiLabels.has(name)) continue
-    if (merchant.length >= 3 && !edits.has(id) && !modelLabels.has(merchant)) merchants.add(merchant)
-  }
   function changeTab(value: string) {
     setTab(value)
     const navigation = tabs.current
@@ -116,22 +120,23 @@ export default function Report({ statement, onClear }: { statement: Statement; o
             <CreditCard aria-hidden="true" /> HDFC credit card
           </Badge>
           <h1 id="report-title" tabIndex={-1} className="text-[clamp(2rem,5.5vw,3.75rem)] leading-[1.04] font-semibold tracking-[-0.06em] outline-none">
-            Monthly spending
+            {wholeStatement ? 'Statement spending' : 'Monthly spending'}
           </h1>
           <p className="text-sm text-muted-foreground sm:text-base">
-            Transactions from {formatRange(transactions[transactions.length - 1].date, transactions[0].date)}, {month.slice(0, 4)}
+            Transactions from {formatRange(transactions[transactions.length - 1].date, transactions[0].date)}
           </p>
         </div>
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex">
-          <Select value={month} onValueChange={(value) => {
-            setMonth(value)
+          <Select value={period} onValueChange={(value) => {
+            setPeriod(value)
             setFilter(null)
           }}>
-            <SelectTrigger aria-label="Report month" className="min-h-11 w-full min-w-0 bg-card sm:w-auto">
+            <SelectTrigger aria-label="Report period" className="min-h-11 w-full min-w-0 bg-card sm:w-auto">
               <CalendarDays aria-hidden="true" />
-              <SelectValue>{formatMonth(month)}</SelectValue>
+              <SelectValue>{wholeStatement ? 'All months' : formatMonth(period)}</SelectValue>
             </SelectTrigger>
-            <SelectContent position="popper">
+            <SelectContent>
+              <SelectItem value={allMonths} className="min-h-11 md:min-h-0">All months</SelectItem>
               {months.map((value) => (
                 <SelectItem key={value} value={value} className="min-h-11 md:min-h-0">{formatMonth(value)}</SelectItem>
               ))}
@@ -231,7 +236,7 @@ export default function Report({ statement, onClear }: { statement: Statement; o
             <Empty className="border border-solid bg-card px-4 py-8">
               <EmptyHeader>
                 <EmptyMedia variant="icon"><ChartPie aria-hidden="true" /></EmptyMedia>
-                <EmptyTitle><h2>No purchases this month</h2></EmptyTitle>
+                <EmptyTitle><h2>No purchases</h2></EmptyTitle>
                 <EmptyDescription>Find payments, credits, and other card activity in Transactions.</EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
@@ -243,11 +248,15 @@ export default function Report({ statement, onClear }: { statement: Statement; o
 
         <TabsContent value="transactions" className={panelClass}>
           <Transactions
-            key={`${month}:${filter}`}
+            key={`${period}:${filter}`}
             transactions={transactions}
             category={filter}
             onClear={() => setFilter(null)}
-            onEdit={(id, category) => setEdits((previous) => new Map(previous).set(id, category))}
+            onEdit={(ids, category) => setEdits((previous) => {
+              const updated = new Map(previous)
+              for (const id of ids) updated.set(id, category)
+              return updated
+            })}
           />
         </TabsContent>
       </Tabs>

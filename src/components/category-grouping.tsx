@@ -22,7 +22,7 @@ function readGeminiKey() {
 }
 
 export function CategoryGrouping({ names, labels, uncategorized, browser, onBrowser, onGeminiBatch }: {
-  names: string[]
+  names: ReadonlyMap<string, number>
   labels: Map<string, Category>
   uncategorized: number
   browser: {
@@ -40,20 +40,20 @@ export function CategoryGrouping({ names, labels, uncategorized, browser, onBrow
   const [savedKey, setSavedKey] = useState(readGeminiKey)
   const title = useRef<HTMLHeadingElement>(null)
   const { availability, hasMerchants, running, download, failed } = browser
-  const completed = names.length > 0 && labels.size === names.length
+  const reviewed = [...names.keys()].filter((name) => labels.has(name)).length
+  const pending = names.size - reviewed
   const browserReady = availability !== null && availability !== 'unavailable' && hasMerchants && !running
-  const geminiHasMerchants = names.length > 0 && !completed
+  const geminiHasMerchants = pending > 0
   const geminiReady = !running && (geminiHasMerchants || savedKey !== null)
   const browserDetails = running ? 'Grouping purchases on this device…'
     : availability === null ? 'Checking browser support…'
       : availability === 'unavailable' ? 'On-device AI is unavailable in this browser.'
-        : hasMerchants ? 'Group uncategorized purchases this month. Data stays on this device.'
-          : 'No remaining purchases to group this month.'
+        : hasMerchants ? 'Group uncategorized purchases in this report. Data stays on this device.'
+          : 'No remaining purchases to group.'
   const geminiDetails = running ? 'Available when browser grouping finishes.'
-    : geminiHasMerchants ? 'Group merchants across the statement using your Gemini API key.'
+    : geminiHasMerchants ? `Group ${pending} uncategorized ${pending === 1 ? 'merchant' : 'merchants'} using your Gemini API key.`
       : savedKey ? 'Manage the API key saved for this tab.'
-        : completed ? 'All eligible merchants in this statement have been reviewed.'
-          : 'No eligible merchant names in this statement.'
+        : 'No uncategorized merchants ready to send.'
 
   useEffect(() => {
     if (open) title.current?.focus()
@@ -70,17 +70,19 @@ export function CategoryGrouping({ names, labels, uncategorized, browser, onBrow
     }
   }
 
-  if (!names.length && !uncategorized && !running && !failed) return null
+  if (!names.size && !uncategorized && !running && !failed && !savedKey && !open) return null
 
   let status = 'Choose a provider to review merchant categories.'
   if (running) {
     status = download === null ? 'Grouping purchases on this device…' : 'Downloading Chrome’s on-device model…'
   } else if (failed) {
     status = 'Browser grouping couldn’t finish. Retry or edit categories in Transactions.'
-  } else if (completed) {
-    status = `Gemini reviewed ${labels.size} ${labels.size === 1 ? 'merchant' : 'merchants'} in this statement.`
   } else if (uncategorized) {
     status = `${uncategorized} ${uncategorized === 1 ? 'purchase needs' : 'purchases need'} a category.`
+  } else if (reviewed) {
+    status = `Gemini reviewed ${reviewed} ${reviewed === 1 ? 'merchant' : 'merchants'} in this period.`
+  } else if (savedKey) {
+    status = 'Gemini API key saved for this tab.'
   }
 
   return (

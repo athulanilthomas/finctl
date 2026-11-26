@@ -15,7 +15,7 @@ import { defaultGeminiModel, geminiModels } from '@/lib/gemini-models'
 import type { GeminiModel } from '@/lib/gemini-models'
 
 export function GeminiCategories({ names, labels, savedKey, onSavedKeyChange, onBatch, onBack, onComplete }: {
-  names: string[]
+  names: ReadonlyMap<string, number>
   labels: Map<string, Category>
   savedKey: string | null
   onSavedKeyChange: (key: string | null) => boolean
@@ -30,8 +30,8 @@ export function GeminiCategories({ names, labels, savedKey, onSavedKeyChange, on
   const backButton = useRef<HTMLButtonElement>(null)
   const focusAfterForget = useRef(false)
   const run = useRef<AbortController | null>(null)
-  const remaining = names.filter((name) => !labels.has(name))
-  const completed = names.length - remaining.length
+  const remaining = [...names.keys()].filter((name) => !labels.has(name))
+  const completed = names.size - remaining.length
 
   useEffect(() => () => { run.current?.abort() }, [])
 
@@ -87,8 +87,8 @@ export function GeminiCategories({ names, labels, savedKey, onSavedKeyChange, on
     <form onSubmit={submit} autoComplete="off" className="panel-enter grid min-w-0 gap-3 sm:gap-5">
       {working ? (
         <div className="grid gap-2 rounded-lg border bg-muted/30 p-3" role="status">
-          <p className="font-medium tabular-nums">{completed} of {names.length} merchants reviewed</p>
-          <Progress value={100 * completed / names.length} aria-label="Merchants reviewed" />
+          <p className="font-medium tabular-nums">{completed} of {names.size} merchants reviewed</p>
+          <Progress value={100 * completed / names.size} aria-label="Merchants reviewed" />
           <p className="text-xs text-muted-foreground">Using Gemini {geminiModels[model].name}</p>
         </div>
       ) : (
@@ -99,7 +99,15 @@ export function GeminiCategories({ names, labels, savedKey, onSavedKeyChange, on
               <div className="min-w-0 overflow-hidden rounded-lg border bg-muted/20">
                 <p id="gemini-names" className="border-b bg-muted/40 px-3 py-2 font-medium">Merchant names to send ({remaining.length})</p>
                 <ul tabIndex={0} aria-labelledby="gemini-names" className="max-h-24 divide-y overflow-auto px-3 text-muted-foreground sm:max-h-32">
-                  {remaining.map((name) => <li key={name} className="py-1.5 wrap-anywhere">{name}</li>)}
+                  {remaining.map((name) => {
+                    const count = names.get(name) ?? 1
+                    return (
+                      <li key={name} className="flex items-baseline justify-between gap-2 py-1.5">
+                        <span className="min-w-0 wrap-anywhere">{name}</span>
+                        {count > 1 && <span className="shrink-0 text-xs tabular-nums">{count} purchases</span>}
+                      </li>
+                    )
+                  })}
                 </ul>
               </div>
             </>
