@@ -1,9 +1,23 @@
-import { getDocument, GlobalWorkerOptions, InvalidPDFException, PasswordResponses } from 'pdfjs-dist'
+import { getDocument, GlobalWorkerOptions, InvalidPDFException, OPS, PasswordResponses } from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import type { TextItem } from 'pdfjs-dist/types/src/display/api'
+import { scanStatement } from './ocria.ts'
 import { parseStatement } from './statement.ts'
 
 GlobalWorkerOptions.workerSrc = workerUrl
+
+const imageOperators = new Set<number>([
+  OPS.paintImageXObject,
+  OPS.paintInlineImageXObject,
+  OPS.paintInlineImageXObjectGroup,
+  OPS.paintImageXObjectRepeat,
+])
+
+type ImportCallbacks = {
+  requestPassword: (submit: (password: string) => void, incorrect: boolean) => void
+  requestScan: (pages: number, start: () => void) => void
+  onScanProgress: (completed: number, pages: number) => void
+}
 
 function textLines(items: TextItem[]) {
   const positioned = items.filter(({ str }) => str.trim())
@@ -35,35 +49,70 @@ function textLines(items: TextItem[]) {
 export async function readStatement(
   file: File,
   signal: AbortSignal,
-  requestPassword: (submit: (password: string) => void, incorrect: boolean) => void,
+  { requestPassword, requestScan, onScanProgress }: ImportCallbacks,
 ) {
   const data = new Uint8Array(await file.arrayBuffer())
   signal.throwIfAborted()
 
+  let password: string | undefined
   const task = getDocument({ data, useWasm: false })
   task.onPassword = (submit: (password: string) => void, reason: number) =>
-    requestPassword(submit, reason === PasswordResponses.INCORRECT_PASSWORD)
+    requestPassword((value) => {
+      password = value
+      submit(value)
+    }, reason === PasswordResponses.INCORRECT_PASSWORD)
 
   const abort = () => { void task.destroy().catch(() => {}) }
   signal.addEventListener('abort', abort, { once: true })
+  const pages: string[][] = []
+  const scanned: number[] = []
 
   try {
     const pdf = await task.promise
-    const pages: string[][] = []
-
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
       signal.throwIfAborted()
       const page = await pdf.getPage(pageNumber)
       const { items } = await page.getTextContent()
-      pages.push(textLines(items.filter((item) => 'str' in item)))
+      const lines = textLines(items.filter((item) => 'str' in item))
+      pages.push(lines)
+      const hasText = lines.some((line) => /\p{L}{2}/u.test(line) && !/^page\s+\d+\s+of\s+\d+\b/i.test(line))
+      if (!hasText) {
+        const { fnArray } = await page.getOperatorList()
+        if (fnArray.some((operator) => imageOperators.has(operator))) scanned.push(pageNumber)
+        page.cleanup()
+      }
     }
-
-    return parseStatement(pages)
   } catch (error) {
     if (error instanceof InvalidPDFException) throw new Error('This file could not be opened as a PDF.')
     throw error
   } finally {
     signal.removeEventListener('abort', abort)
     if (!task.destroyed) await task.destroy()
+  }
+
+  signal.throwIfAborted()
+  if (!scanned.length) return parseStatement(pages)
+
+  await new Promise<void>((resolve, reject) => {
+    const cancel = () => reject(signal.reason)
+    signal.addEventListener('abort', cancel, { once: true })
+    requestScan(scanned.length, () => {
+      signal.removeEventListener('abort', cancel)
+      resolve()
+    })
+  })
+
+  signal.throwIfAborted()
+  onScanProgress(0, scanned.length)
+  const scannedPages = await scanStatement({
+    data: await file.arrayBuffer(),
+    password,
+    pages: scanned,
+  }, signal, (completed) => onScanProgress(completed, scanned.length))
+  for (const page of scannedPages) pages[page.number - 1] = page.lines
+
+  return {
+    ...parseStatement(pages),
+    scan: { pages: scanned.length, reviewPages: scannedPages.filter((page) => page.needsReview).map((page) => page.number) },
   }
 }

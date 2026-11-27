@@ -25,6 +25,7 @@ export type Statement = {
   transactions: Transaction[]
   unreadRows: number
   totalDifferences: { kind: 'charges' | 'credits'; read: number; printed: number }[]
+  scan?: { pages: number; reviewPages: number[] }
 }
 
 const dateStart = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4}|\d{2})\b(?:\s*\|?\s*\d{1,2}:\d{2}(?::\d{2})?)?\s*\|?\s*/
@@ -116,7 +117,7 @@ function comparePrintedTotals(lines: string[], transactions: Transaction[]): Sta
 export function parseStatement(pages: string[][]): Statement {
   const header = pages[0]?.join(' ') ?? ''
   if (!/\bhdfc\s*bank\b/i.test(header) || !/\b(?:credit\s*card\s*statement|hdfc\s*bank\s*credit\s*cards?|previous statement dues)\b/i.test(header)) {
-    throw new Error('Open a text-based HDFC Bank credit-card statement PDF.')
+    throw new Error('Open an HDFC Bank credit-card statement PDF.')
   }
 
   const transactions: Transaction[] = []
@@ -159,7 +160,7 @@ export function parseStatement(pages: string[][]): Statement {
   }
 
   if (!transactions.length) {
-    throw new Error('No transactions could be read. Use a text-based HDFC credit-card statement with activity.')
+    throw new Error('No transactions could be read. Use a readable HDFC credit-card statement with activity.')
   }
 
   return {
