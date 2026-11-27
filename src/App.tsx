@@ -1,6 +1,6 @@
 import { addTransitionType, startTransition, useLayoutEffect, useRef, useState, ViewTransition } from 'react'
 import type { FormEvent } from 'react'
-import { ChartNoAxesColumnIncreasing, FileText, LoaderCircle, LockKeyhole, Upload } from 'lucide-react'
+import { ChartNoAxesColumnIncreasing, FileText, LoaderCircle, LockKeyhole, ScanLine, Upload } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -10,15 +10,19 @@ import {
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Progress } from '@/components/ui/progress'
 import { SpendingPreview } from '@/components/spending-preview'
 import { ThemeToggle } from '@/components/theme-toggle'
+import type { PdfReadMethod } from '@/lib/pdf'
 import type { Statement } from '@/lib/statement'
 
 const loadReport = () => import('@/components/report')
 type OpenedReport = { statement: Statement; Component: Awaited<ReturnType<typeof loadReport>>['default'] }
+type Scan = { pages: number; method: PdfReadMethod } & ({ start: () => void; completed?: never } | { completed: number; start?: never })
 
 export default function App() {
   const filePicker = useRef<HTMLInputElement>(null)
+  const readMethod = useRef<PdfReadMethod>('auto')
   const activeImport = useRef<AbortController | null>(null)
   const main = useRef<HTMLElement>(null)
   const hadReport = useRef(false)
@@ -30,6 +34,9 @@ export default function App() {
     submit: (password: string) => void
     incorrect: boolean
   } | null>(null)
+  const [scan, setScan] = useState<Scan | null>(null)
+  const readAll = scan?.method === 'ocria'
+  const scanAction = readAll ? 'Read PDF' : 'Scan pages'
   const reportOpen = report !== null
   const nativeScreenMotion = typeof document.startViewTransition === 'function' && CSS.supports('view-transition-class: screen-change')
 
@@ -45,6 +52,7 @@ export default function App() {
     activeImport.current = null
     setFilename('')
     setPasswordRequest(null)
+    setScan(null)
   }
 
   function showScreen(next: OpenedReport | null) {
@@ -62,7 +70,12 @@ export default function App() {
     }
   }
 
-  async function openFile(file: File) {
+  function choosePdf(method: PdfReadMethod) {
+    readMethod.current = method
+    filePicker.current?.click()
+  }
+
+  async function openFile(file: File, method: PdfReadMethod = 'auto') {
     cancelImport()
     setError('')
     if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
@@ -75,9 +88,17 @@ export default function App() {
     setFilename(file.name)
     try {
       const [statement, { default: Component }] = await Promise.all([
-        import('@/lib/pdf').then(({ readStatement }) => readStatement(file, controller.signal, (submit, incorrect) => {
-          if (!controller.signal.aborted) setPasswordRequest({ submit, incorrect })
-        })),
+        import('@/lib/pdf').then(({ readStatement }) => readStatement(file, controller.signal, {
+          requestPassword(submit, incorrect) {
+            if (!controller.signal.aborted) setPasswordRequest({ submit, incorrect })
+          },
+          requestScan(pages, start) {
+            if (!controller.signal.aborted) setScan({ pages, method, start })
+          },
+          onScanProgress(completed, pages) {
+            if (!controller.signal.aborted) setScan({ pages, method, completed })
+          },
+        }, method)),
         loadReport(),
       ])
       if (!controller.signal.aborted) showScreen({ statement, Component })
@@ -163,7 +184,7 @@ export default function App() {
                         <EmptyTitle className="text-base">
                           <h2>Open a statement</h2>
                         </EmptyTitle>
-                        <EmptyDescription>Password-protected PDFs supported.</EmptyDescription>
+                        <EmptyDescription>Scanned and password-protected PDFs supported.</EmptyDescription>
                       </div>
                     </EmptyHeader>
                     <input
@@ -175,7 +196,7 @@ export default function App() {
                       onChange={(event) => {
                         const file = event.currentTarget.files?.[0]
                         event.currentTarget.value = ''
-                        if (file) void openFile(file)
+                        if (file) void openFile(file, readMethod.current)
                       }}
                     />
                     <EmptyContent className="max-w-none sm:w-auto sm:max-w-52">
@@ -188,9 +209,14 @@ export default function App() {
                           <Button variant="ghost" className="min-h-11" onClick={cancelImport}>Cancel</Button>
                         </div>
                       ) : (
-                        <Button className="min-h-11 w-full sm:w-auto" size="lg" onClick={() => filePicker.current?.click()}>
-                          <Upload aria-hidden="true" /> Choose PDF
-                        </Button>
+                        <div className="grid w-full gap-2">
+                          <Button className="min-h-11" size="lg" onClick={() => choosePdf('auto')}>
+                            <Upload aria-hidden="true" /> Choose PDF
+                          </Button>
+                          <Button variant="outline" className="min-h-11" size="lg" onClick={() => choosePdf('ocria')}>
+                            <ScanLine aria-hidden="true" /> Read with OCRia
+                          </Button>
+                        </div>
                       )}
                     </EmptyContent>
                   </Empty>
@@ -238,6 +264,45 @@ export default function App() {
             </DialogFooter>
           </form>
         </DialogContent>
+      </Dialog>
+      <Dialog open={scan !== null} onOpenChange={(open) => { if (!open) cancelImport() }}>
+        {scan && (
+          <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto p-4 sm:p-6" showCloseButton={false}>
+            <DialogHeader>
+              <div className="mb-1 grid size-10 place-items-center self-start rounded-lg border bg-muted">
+                <ScanLine className="size-5" aria-hidden="true" />
+              </div>
+              <DialogTitle>
+                {readAll ? (scan.start ? 'Read with OCRia' : 'Reading with OCRia') : (scan.start ? 'Scan your statement' : 'Scanning on this device')}
+              </DialogTitle>
+              <DialogDescription>
+                {scan.start ? (
+                  <>
+                    <a href="https://huggingface.co/llamaindex/OCRia-nano-1" target="_blank" rel="noreferrer" className="rounded-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-ring">OCRia Nano</a>
+                    {' '}will read {readAll ? 'this PDF' : `${scan.pages} scanned ${scan.pages === 1 ? 'page' : 'pages'}`} on your device.
+                  </>
+                ) : 'Your statement stays in this browser.'}
+              </DialogDescription>
+            </DialogHeader>
+            {scan.start ? (
+              <p className="text-sm text-muted-foreground">
+                By selecting {scanAction}, you agree to LlamaIndex’s{' '}
+                <a href="/ocria-nano-1/LICENSE.txt" target="_blank" rel="noreferrer" className="rounded-sm font-medium text-foreground underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-ring">OCRia model license</a>.
+              </p>
+            ) : (
+              <div className="grid gap-2">
+                <p className="text-sm text-muted-foreground tabular-nums" role="status">
+                  {scan.completed === 0 ? 'Preparing the first page…' : `${scan.completed} of ${scan.pages} pages ${readAll ? 'read' : 'scanned'}`}
+                </p>
+                <Progress value={100 * scan.completed / scan.pages} aria-label={readAll ? 'Pages read' : 'Pages scanned'} />
+              </div>
+            )}
+            <DialogFooter className={scan.start ? 'grid grid-cols-2 sm:flex' : ''}>
+              <Button variant="outline" className="min-h-11" onClick={cancelImport}>Cancel</Button>
+              {scan.start && <Button className="min-h-11" onClick={scan.start}>{scanAction}</Button>}
+            </DialogFooter>
+          </DialogContent>
+        )}
       </Dialog>
     </div>
   )

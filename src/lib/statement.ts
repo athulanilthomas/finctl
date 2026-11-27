@@ -24,10 +24,13 @@ export type Transaction = {
 export type Statement = {
   transactions: Transaction[]
   unreadRows: number
+  printedTotalsRead: boolean
   totalDifferences: { kind: 'charges' | 'credits'; read: number; printed: number }[]
+  scan?: { pages: number; readAll: boolean; reviewPages: number[] }
 }
 
-const dateStart = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4}|\d{2})\b(?:\s*\|?\s*\d{1,2}:\d{2}(?::\d{2})?)?\s*\|?\s*/
+const dateStart = /^(\d{1,2})\s*[/.-]\s*(\d{1,2})\s*[/.-]\s*(\d{4}|\d{2})\b(?:\s*\|?\s*\d{1,2}:\d{2}(?::\d{2})?)?\s*\|?\s*/
+const damagedDateStart = /^(?:[\dilo]{1,2}(?:\s*[/.-]\s*|\s+)){2}[\dilo]{1,4}(?=\s|\||$)/i
 const amountEnd = /(?:^|\s)(?<sign>[+−-])?\s*(?<currency>₹|INR|RS\.?|C|`)?\s*(?<amountSign>[+−-])?\s*(?<value>\d[\d,]*\.\d{2})(?:\s*(?<marker>[+−-]|CR\.?|DR\.?|CREDIT|DEBIT))?(?:\s+[lI•●])?$/i
 const wrappedDirection = /^(CR\.?|DR\.?|CREDIT|DEBIT)(?:\s+[lI•●])?$/i
 const tableStart = /^(?:domestic|international)\s+(?:retail\s+)?transactions\b|^\s*(?:transaction\s+)?date\b.*\b(?:description|particulars|details)\b.*\bamount\b/i
@@ -86,9 +89,9 @@ function parseRow(id: number, date: string | null, parts: string[]): Transaction
   return { ...base, kind: 'purchase', merchant, category: categorize(merchant) }
 }
 
-function comparePrintedTotals(lines: string[], transactions: Transaction[]): Statement['totalDifferences'] {
+function comparePrintedTotals(lines: string[], transactions: Transaction[]): Statement['totalDifferences'] | undefined {
   const header = lines.findIndex((line) => /previous statement dues/i.test(line))
-  if (header === -1) return []
+  if (header === -1) return
 
   for (const line of lines.slice(header + 1, header + 6)) {
     const amounts = line.match(/\d[\d,]*\.\d{2}/g)
@@ -109,14 +112,12 @@ function comparePrintedTotals(lines: string[], transactions: Transaction[]): Sta
     if (actualCredits !== credits) differences.push({ kind: 'credits', read: actualCredits, printed: credits })
     return differences
   }
-
-  return []
 }
 
 export function parseStatement(pages: string[][]): Statement {
   const header = pages[0]?.join(' ') ?? ''
   if (!/\bhdfc\s*bank\b/i.test(header) || !/\b(?:credit\s*card\s*statement|hdfc\s*bank\s*credit\s*cards?|previous statement dues)\b/i.test(header)) {
-    throw new Error('Open a text-based HDFC Bank credit-card statement PDF.')
+    throw new Error('Open an HDFC Bank credit-card statement PDF.')
   }
 
   const transactions: Transaction[] = []
@@ -151,6 +152,9 @@ export function parseStatement(pages: string[][]): Statement {
       if (date) {
         finishRow()
         pending = { date: toDate(date), parts: [line.slice(date[0].length)] }
+      } else if (damagedDateStart.test(line)) {
+        finishRow()
+        unreadRows++
       } else {
         pending?.parts.push(line)
       }
@@ -159,12 +163,14 @@ export function parseStatement(pages: string[][]): Statement {
   }
 
   if (!transactions.length) {
-    throw new Error('No transactions could be read. Use a text-based HDFC credit-card statement with activity.')
+    throw new Error('No transactions could be read. Use a readable HDFC credit-card statement with activity.')
   }
 
+  const totalDifferences = comparePrintedTotals(pages[0], transactions)
   return {
     transactions: transactions.sort((a, b) => b.date.localeCompare(a.date)),
     unreadRows,
-    totalDifferences: comparePrintedTotals(pages[0], transactions),
+    printedTotalsRead: totalDifferences !== undefined,
+    totalDifferences: totalDifferences ?? [],
   }
 }

@@ -86,6 +86,25 @@ test('matches repeat purchases with different channel and reference details', ()
   ])
 })
 
+test('keeps a readable purchase separate from rows with damaged OCR dates', () => {
+  const { transactions, unreadRows, printedTotalsRead } = parseStatement([[
+    title,
+    'Domestic Transactions',
+    columns,
+    '07/01/2026  NOVA MART  C 42.50',
+    '08/0l/2026  ORION MART  C 1,129.00 CR',
+    '09 / 01 / 2026  KEPLER MART  C 80.00',
+    '10/01 2026  LYRA MART  C 14.25',
+  ]])
+
+  assert.deepEqual(transactions.map(({ date, description, kind, amount }) => [date, description, kind, amount]), [
+    ['2026-01-09', 'KEPLER MART', 'purchase', 8000],
+    ['2026-01-07', 'NOVA MART', 'purchase', 4250],
+  ])
+  assert.equal(unreadRows, 2)
+  assert.equal(printedTotalsRead, false)
+})
+
 test('checks activity against printed statement totals when present', () => {
   const lines = [
     title,
@@ -97,13 +116,18 @@ test('checks activity against printed statement totals when present', () => {
     '02/01/2026  PAYMENT THANKYOU  + C 90.00',
     '03/01/2026  FINANCE CHARGE  C 2.99',
   ]
-  assert.deepEqual(parseStatement([lines]).totalDifferences, [])
+  const matched = parseStatement([lines])
+  assert.equal(matched.printedTotalsRead, true)
+  assert.deepEqual(matched.totalDifferences, [])
   assert.deepEqual(parseStatement([lines.slice(0, -1)]).totalDifferences, [
     { kind: 'charges', read: 4200, printed: 4499 },
   ])
   assert.deepEqual(parseStatement([lines.filter((line) => !line.includes('PAYMENT THANKYOU'))]).totalDifferences, [
     { kind: 'credits', read: 0, printed: 9000 },
   ])
+  const unreadableTotals = parseStatement([lines.map((line) => line.replace('C55.00', 'C85.00'))])
+  assert.equal(unreadableTotals.printedTotalsRead, false)
+  assert.deepEqual(unreadableTotals.totalDifferences, [])
 })
 
 test('reconciles a sign after the currency and a wrapped credit marker', () => {

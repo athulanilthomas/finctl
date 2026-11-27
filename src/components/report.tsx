@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { CalendarDays, ChartPie, CircleAlert, CreditCard, LayoutDashboard, List } from 'lucide-react'
+import { CalendarDays, ChartPie, CircleAlert, CreditCard, LayoutDashboard, List, ScanLine } from 'lucide-react'
 import { CategoryGrouping } from '@/components/category-grouping'
 import { ReportOverview } from '@/components/report-overview'
 import { Transactions } from '@/components/transactions'
@@ -79,6 +79,9 @@ export default function Report({ statement, onClear }: { statement: Statement; o
 
   const summary = useMemo(() => summarize(transactions), [transactions])
   const { totals, ranked, uncategorized } = summary
+  const { scan, unreadRows, printedTotalsRead, totalDifferences } = statement
+  const unverifiedScan = Boolean(scan && !printedTotalsRead)
+  const needsReview = unreadRows > 0 || totalDifferences.length > 0 || Boolean(scan?.reviewPages.length) || unverifiedScan
   const colors = ranked.map(({ category }, index) => category === 'uncategorized' ? 'var(--muted-foreground)' : chartColors[index % chartColors.length])
   function changeTab(value: string) {
     setTab(value)
@@ -146,19 +149,32 @@ export default function Report({ statement, onClear }: { statement: Statement; o
         </div>
       </section>
 
-      {(statement.unreadRows > 0 || statement.totalDifferences.length > 0) && (
-        <Alert variant="destructive">
-          <CircleAlert aria-hidden="true" />
-          <AlertTitle>Check this statement</AlertTitle>
+      {(scan || needsReview) && (
+        <Alert variant={needsReview ? 'destructive' : 'default'}>
+          {needsReview ? <CircleAlert aria-hidden="true" /> : <ScanLine aria-hidden="true" />}
+          <AlertTitle>{needsReview ? 'Check this statement' : scan?.readAll ? 'Read with OCRia' : 'Scanned on this device'}</AlertTitle>
           <AlertDescription className="col-start-2 grid min-w-0 gap-1.5">
-            {statement.unreadRows > 0 && (
+            {scan && (
+              <p className="text-muted-foreground">
+                {scan.readAll ? 'LiteParse' : 'OCRia Nano'} read {scan.pages} {scan.pages === 1 ? 'page' : 'pages'}.
+                {scan.reviewPages.length > 0 && ` Check unclear text on ${scan.reviewPages.length === 1 ? 'page' : 'pages'} ${scan.reviewPages.join(', ')}.`}
+              </p>
+            )}
+            {unreadRows > 0 && (
               <div className="text-muted-foreground">
-                {statement.unreadRows} transaction {statement.unreadRows === 1 ? 'row could' : 'rows could'} not be read.
+                {unreadRows} transaction {unreadRows === 1 ? 'row could' : 'rows could'} not be read.
               </div>
             )}
-            {statement.totalDifferences.length > 0 && (
+            {scan && totalDifferences.length === 0 && (
+              <p className="text-muted-foreground">
+                {unverifiedScan
+                  ? 'The printed totals could not be read to verify charges and credits.'
+                  : 'Statement charges and credits match the printed totals.'}
+              </p>
+            )}
+            {totalDifferences.length > 0 && (
               <dl className="grid gap-x-6 gap-y-1.5 sm:flex sm:flex-wrap">
-                {statement.totalDifferences.map(({ kind, read, printed }) => (
+                {totalDifferences.map(({ kind, read, printed }) => (
                   <div key={kind}>
                     <dt className="font-medium text-foreground">{kind === 'charges' ? 'Charges' : 'Payments and credits'}</dt>
                     <dd className="text-muted-foreground tabular-nums">{formatAmount(read)} read · {formatAmount(printed)} on the PDF</dd>

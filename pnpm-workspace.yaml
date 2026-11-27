@@ -1,0 +1,2 @@
+minimumReleaseAgeExclude:
+  - '@llamaindex/liteparse-wasm@2.21.3'
