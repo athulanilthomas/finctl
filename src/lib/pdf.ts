@@ -13,6 +13,8 @@ const imageOperators = new Set<number>([
   OPS.paintImageXObjectRepeat,
 ])
 
+export type PdfReadMethod = 'auto' | 'ocria'
+
 type ImportCallbacks = {
   requestPassword: (submit: (password: string) => void, incorrect: boolean) => void
   requestScan: (pages: number, start: () => void) => void
@@ -50,6 +52,7 @@ export async function readStatement(
   file: File,
   signal: AbortSignal,
   { requestPassword, requestScan, onScanProgress }: ImportCallbacks,
+  method: PdfReadMethod,
 ) {
   const data = new Uint8Array(await file.arrayBuffer())
   signal.throwIfAborted()
@@ -66,20 +69,24 @@ export async function readStatement(
   signal.addEventListener('abort', abort, { once: true })
   const pages: string[][] = []
   const scanned: number[] = []
+  let totalPages = 0
 
   try {
     const pdf = await task.promise
-    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
-      signal.throwIfAborted()
-      const page = await pdf.getPage(pageNumber)
-      const { items } = await page.getTextContent()
-      const lines = textLines(items.filter((item) => 'str' in item))
-      pages.push(lines)
-      const hasText = lines.some((line) => /\p{L}{2}/u.test(line) && !/^page\s+\d+\s+of\s+\d+\b/i.test(line))
-      if (!hasText) {
-        const { fnArray } = await page.getOperatorList()
-        if (fnArray.some((operator) => imageOperators.has(operator))) scanned.push(pageNumber)
-        page.cleanup()
+    totalPages = pdf.numPages
+    if (method === 'auto') {
+      for (let pageNumber = 1; pageNumber <= totalPages; pageNumber++) {
+        signal.throwIfAborted()
+        const page = await pdf.getPage(pageNumber)
+        const { items } = await page.getTextContent()
+        const lines = textLines(items.filter((item) => 'str' in item))
+        pages.push(lines)
+        const hasText = lines.some((line) => /\p{L}{2}/u.test(line) && !/^page\s+\d+\s+of\s+\d+\b/i.test(line))
+        if (!hasText) {
+          const { fnArray } = await page.getOperatorList()
+          if (fnArray.some((operator) => imageOperators.has(operator))) scanned.push(pageNumber)
+          page.cleanup()
+        }
       }
     }
   } catch (error) {
@@ -91,28 +98,30 @@ export async function readStatement(
   }
 
   signal.throwIfAborted()
-  if (!scanned.length) return parseStatement(pages)
+  const readAll = method === 'ocria'
+  const requestedPages = readAll ? totalPages : scanned.length
+  if (!requestedPages) return parseStatement(pages)
 
   await new Promise<void>((resolve, reject) => {
     const cancel = () => reject(signal.reason)
     signal.addEventListener('abort', cancel, { once: true })
-    requestScan(scanned.length, () => {
+    requestScan(requestedPages, () => {
       signal.removeEventListener('abort', cancel)
       resolve()
     })
   })
 
   signal.throwIfAborted()
-  onScanProgress(0, scanned.length)
+  onScanProgress(0, requestedPages)
   const scannedPages = await scanStatement({
     data: await file.arrayBuffer(),
     password,
-    pages: scanned,
-  }, signal, (completed) => onScanProgress(completed, scanned.length))
+    pages: readAll ? undefined : scanned,
+  }, signal, (completed) => onScanProgress(completed, requestedPages))
   for (const page of scannedPages) pages[page.number - 1] = page.lines
 
   return {
     ...parseStatement(pages),
-    scan: { pages: scanned.length, reviewPages: scannedPages.filter((page) => page.needsReview).map((page) => page.number) },
+    scan: { pages: requestedPages, readAll, reviewPages: scannedPages.filter((page) => page.needsReview).map((page) => page.number) },
   }
 }

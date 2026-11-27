@@ -1,7 +1,7 @@
 export type ScanRequest = {
   data: ArrayBuffer
   password?: string
-  pages: number[]
+  pages?: number[]
 }
 
 type ScanPage = { number: number; lines: string[]; needsReview: boolean }
@@ -18,7 +18,7 @@ export async function scanStatement(request: ScanRequest, signal: AbortSignal, o
 
   try {
     return await new Promise<ScanPage[]>((resolve, reject) => {
-      const fail = () => reject(new Error('This PDF could not be scanned on this device. Try again or open the original statement PDF.'))
+      const fail = () => reject(new Error('OCRia could not read this PDF. Try again or use Choose PDF.'))
       signal.addEventListener('abort', () => reject(signal.reason), { once: true, signal: listeners.signal })
       worker.onmessage = ({ data }: MessageEvent<ScanMessage>) => {
         if (data.type === 'progress') onProgress(data.completed)

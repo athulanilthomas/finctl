@@ -151,11 +151,11 @@ export default function Report({ statement, onClear }: { statement: Statement; o
       {(scan || needsReview) && (
         <Alert variant={needsReview ? 'destructive' : 'default'}>
           {needsReview ? <CircleAlert aria-hidden="true" /> : <ScanLine aria-hidden="true" />}
-          <AlertTitle>{needsReview ? 'Check this statement' : 'Scanned on this device'}</AlertTitle>
+          <AlertTitle>{needsReview ? 'Check this statement' : scan?.readAll ? 'Read with OCRia' : 'Scanned on this device'}</AlertTitle>
           <AlertDescription className="col-start-2 grid min-w-0 gap-1.5">
             {scan && (
               <p className="text-muted-foreground">
-                OCRia Nano read {scan.pages} {scan.pages === 1 ? 'page' : 'pages'}.
+                {scan.readAll ? 'LiteParse' : 'OCRia Nano'} read {scan.pages} {scan.pages === 1 ? 'page' : 'pages'}.
                 {scan.reviewPages.length > 0 && ` Check unclear text on ${scan.reviewPages.length === 1 ? 'page' : 'pages'} ${scan.reviewPages.join(', ')}.`}
               </p>
             )}

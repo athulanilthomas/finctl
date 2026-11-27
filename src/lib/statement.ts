@@ -25,7 +25,7 @@ export type Statement = {
   transactions: Transaction[]
   unreadRows: number
   totalDifferences: { kind: 'charges' | 'credits'; read: number; printed: number }[]
-  scan?: { pages: number; reviewPages: number[] }
+  scan?: { pages: number; readAll: boolean; reviewPages: number[] }
 }
 
 const dateStart = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4}|\d{2})\b(?:\s*\|?\s*\d{1,2}:\d{2}(?::\d{2})?)?\s*\|?\s*/
