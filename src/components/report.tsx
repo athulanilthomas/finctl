@@ -79,8 +79,9 @@ export default function Report({ statement, onClear }: { statement: Statement; o
 
   const summary = useMemo(() => summarize(transactions), [transactions])
   const { totals, ranked, uncategorized } = summary
-  const { scan, unreadRows, totalDifferences } = statement
-  const needsReview = unreadRows > 0 || totalDifferences.length > 0 || Boolean(scan?.reviewPages.length)
+  const { scan, unreadRows, printedTotalsRead, totalDifferences } = statement
+  const unverifiedScan = Boolean(scan && !printedTotalsRead)
+  const needsReview = unreadRows > 0 || totalDifferences.length > 0 || Boolean(scan?.reviewPages.length) || unverifiedScan
   const colors = ranked.map(({ category }, index) => category === 'uncategorized' ? 'var(--muted-foreground)' : chartColors[index % chartColors.length])
   function changeTab(value: string) {
     setTab(value)
@@ -163,6 +164,13 @@ export default function Report({ statement, onClear }: { statement: Statement; o
               <div className="text-muted-foreground">
                 {unreadRows} transaction {unreadRows === 1 ? 'row could' : 'rows could'} not be read.
               </div>
+            )}
+            {scan && totalDifferences.length === 0 && (
+              <p className="text-muted-foreground">
+                {unverifiedScan
+                  ? 'The printed totals could not be read to verify charges and credits.'
+                  : 'Statement charges and credits match the printed totals.'}
+              </p>
             )}
             {totalDifferences.length > 0 && (
               <dl className="grid gap-x-6 gap-y-1.5 sm:flex sm:flex-wrap">
